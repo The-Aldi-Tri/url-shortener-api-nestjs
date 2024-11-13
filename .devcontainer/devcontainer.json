@@ -1,0 +1,25 @@
+// Documentation: https://containers.dev/guide/dockerfile
+{
+  "name": "Url-Shortener-API",
+  "dockerComposeFile": "./docker-compose.yml",
+  "service": "url-shortener-api",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "aaron-bond.better-comments",
+        "mikestead.dotenv",
+        "usernamehw.errorlens",
+        "streetsidesoftware.code-spell-checker",
+        "eamodio.gitlens",
+        "streetsidesoftware.code-spell-checker-indonesian",
+        "VisualStudioExptTeam.vscodeintellicode",
+        "esbenp.prettier-vscode",
+        "pflannery.vscode-versionlens",
+        "YoavBls.pretty-ts-errors",
+        "firsttris.vscode-jest-runner"
+      ]
+    }
+  }
+}

@@ -1,0 +1,37 @@
+name: Url-Shortener-API-Nestjs
+services:
+  url-shortener-api:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm
+    volumes:
+      - ..:/workspace:cached
+    command: sleep infinity
+    networks:
+      - url-shortener-api-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  mongodb:
+    image: mongo:latest
+    volumes:
+      - mongo-db:/data/db
+      - mongo-configdb:/data/configdb
+    networks:
+      - url-shortener-api-network
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=developer
+      - MONGO_INITDB_ROOT_PASSWORD=SuperSecret
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh 127.0.0.1:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 2
+    ports:
+      - 27017:27017
+
+networks:
+  url-shortener-api-network:
+
+volumes:
+  mongo-db:
+  mongo-configdb:
