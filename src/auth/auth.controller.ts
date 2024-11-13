@@ -20,6 +20,7 @@ import {
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { ChangePasswordAuthDto } from './dto/change-password-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
@@ -34,6 +35,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiCreatedResponse({ description: 'User successfully created' })
   @ApiConflictResponse({ description: 'Duplicate field' })
   @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
@@ -44,6 +46,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiBody({
     type: LoginAuthDto,
     examples: {

@@ -7,8 +7,9 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { Connection } from 'mongoose';
 import { ClsModule, ClsService } from 'nestjs-cls';
 import { AppController } from './app.controller';
@@ -93,6 +94,12 @@ import { UserModule } from './user/user.module';
         };
       },
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // in ms
+        limit: 60,
+      },
+    ]),
     UserModule,
     AuthModule,
     UrlModule,
@@ -115,6 +122,10 @@ import { UserModule } from './user/user.module';
         transform: true,
         errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
       }),
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { WinstonModule } from 'nest-winston';
@@ -8,7 +9,7 @@ import { AppModule } from './app.module';
 import { WinstonLoggerOptions } from './Winston.logger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: WinstonModule.createLogger(WinstonLoggerOptions),
   });
 
@@ -16,6 +17,10 @@ async function bootstrap() {
   app.enableCors({
     origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   });
+
+  // Trust requests from the loopback address
+  // if api used behind proxy server
+  app.set('trust proxy', 'loopback');
 
   const config = new DocumentBuilder()
     .setTitle('Url Shortener')
