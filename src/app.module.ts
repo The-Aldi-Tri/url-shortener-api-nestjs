@@ -1,3 +1,5 @@
+import { MailerModule } from '@nestjs-modules/mailer';
+import { PugAdapter } from '@nestjs-modules/mailer/dist/adapters/pug.adapter';
 import {
   HttpStatus,
   Logger,
@@ -15,6 +17,7 @@ import { ClsModule, ClsService } from 'nestjs-cls';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { MailModule } from './mail/mail.module';
 import { MongoExceptionFilter } from './MongoError.filter';
 import { ReqResLoggerMiddleware } from './ReqRes-Logger.middleware';
 import { UrlModule } from './url/url.module';
@@ -31,6 +34,7 @@ import { UserModule } from './user/user.module';
         // automatically mount the
         // ClsMiddleware for all routes
         mount: true,
+
         // and use the setup method to
         // provide default store values.
         setup: (cls, req) => {
@@ -43,9 +47,9 @@ import { UserModule } from './user/user.module';
       inject: [ConfigService, ClsService],
       useFactory: async (configService: ConfigService, cls: ClsService) => {
         const uri =
-          process.env.NODE_ENV === 'test'
-            ? configService.getOrThrow<string>('DATABASE_URI_TEST')
-            : configService.getOrThrow<string>('DATABASE_URI');
+          process.env.NODE_ENV === 'production'
+            ? configService.getOrThrow<string>('DATABASE_URI')
+            : configService.getOrThrow<string>('DATABASE_URI_TEST');
         const logger = new Logger('Mongoose');
 
         return {
@@ -100,10 +104,34 @@ import { UserModule } from './user/user.module';
         limit: 60,
       },
     ]),
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => {
+        return {
+          transport: {
+            host: configService.getOrThrow<string>('SMTP_HOST'),
+            port: configService.getOrThrow<string>('SMTP_PORT'),
+            auth: {
+              user: configService.getOrThrow<string>('SMTP_USER'),
+              pass: configService.getOrThrow<string>('SMTP_PASS'),
+            },
+          },
+          template: {
+            dir: __dirname + '/../templates',
+            adapter: new PugAdapter({ inlineCssEnabled: true }),
+            options: {
+              strict: true,
+            },
+          },
+        };
+      },
+    }),
     UserModule,
     AuthModule,
     UrlModule,
     UserAuthModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [

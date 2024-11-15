@@ -1,7 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  Length,
+  Matches,
+} from 'class-validator';
 
-export class UpdateUserAuthDto {
+export class SendMailDto {
   @ApiProperty({
     description:
       'Username (only support letters[A-Za-z], numbers[0-9], hyphens[-], underscores[_] and dot [.]',
@@ -18,4 +24,13 @@ export class UpdateUserAuthDto {
       'Username must contain only letters, numbers, hyphens, underscores and dot',
   })
   username: string;
+
+  @ApiProperty({
+    description: 'E-mail address',
+    example: 'user@example.com',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
 }

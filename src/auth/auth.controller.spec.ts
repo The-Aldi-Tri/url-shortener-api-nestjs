@@ -23,6 +23,7 @@ describe('AuthController', () => {
     _id: new Types.ObjectId(),
     email: 'test@example.com',
     username: 'testUser',
+    is_verified: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -61,6 +62,7 @@ describe('AuthController', () => {
       };
       const addedUser = { ...userExample };
       const mockResult = {
+        statusCode: 201,
         message: 'User successfully created',
         data: addedUser,
       };
@@ -88,6 +90,7 @@ describe('AuthController', () => {
         refreshToken: 'refreshToken',
       };
       const mockResult = {
+        statusCode: 200,
         message: 'Login success',
         data: tokens,
       };
@@ -108,6 +111,7 @@ describe('AuthController', () => {
       const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
       const newAccessToken = 'newAccessToken';
       const mockResult = {
+        statusCode: 200,
         message: 'Refresh token success',
         data: { accessToken: newAccessToken },
       };
@@ -131,7 +135,10 @@ describe('AuthController', () => {
         password: '<PASSWORD>',
         newPassword: '<NEW_PASSWORD>',
       };
-      const mockResult = { message: 'Password successfully changed' };
+      const mockResult = {
+        statusCode: 200,
+        message: 'Password successfully changed',
+      };
       authService.changePassword = jest.fn().mockResolvedValue(undefined);
 
       const result = await authController.changePassword(

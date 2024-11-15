@@ -52,7 +52,7 @@ describe('UrlService', () => {
     expect(urlService).toBeDefined();
   });
 
-  describe('create', () => {
+  describe('createUrl', () => {
     it('should create a new URL successfully', async () => {
       const createUrlDto: CreateUrlDto = {
         origin: urlExampleFull.origin,
@@ -65,7 +65,7 @@ describe('UrlService', () => {
       urlModel.create = jest.fn().mockResolvedValue(urlDoc);
       urlDoc.toObject = jest.fn().mockReturnValue({ ...urlExample });
 
-      const addedUrl = await urlService.create(userId, createUrlDto);
+      const addedUrl = await urlService.createUrl(userId, createUrlDto);
 
       expect(urlModel.create).toHaveBeenCalledWith({
         ...createUrlDto,
@@ -98,7 +98,7 @@ describe('UrlService', () => {
     });
   });
 
-  describe('findByShorten', () => {
+  describe('findUrlByShorten', () => {
     it('should return the URL if found', async () => {
       const shorten = urlExampleFull.shorten;
       const query = {} as Query<UrlDocument, UrlDocument>;
@@ -108,7 +108,7 @@ describe('UrlService', () => {
       queryAfterLean.exec = jest.fn().mockResolvedValue({ ...urlExample });
       const mockUrl = { ...urlExample };
 
-      const url = await urlService.findByShorten(shorten);
+      const url = await urlService.findUrlByShorten(shorten);
 
       expect(urlModel.findOne).toHaveBeenCalledWith({ shorten });
       expect(query.lean).toHaveBeenCalled();
@@ -124,7 +124,7 @@ describe('UrlService', () => {
       query.lean = jest.fn().mockReturnValue(queryAfterLean);
       queryAfterLean.exec = jest.fn().mockResolvedValue(null);
 
-      await expect(urlService.findByShorten(shorten)).rejects.toThrow(
+      await expect(urlService.findUrlByShorten(shorten)).rejects.toThrow(
         new NotFoundException(`Url not found`),
       );
       expect(urlModel.findOne).toHaveBeenCalledWith({ shorten });
@@ -133,7 +133,7 @@ describe('UrlService', () => {
     });
   });
 
-  describe('incrementClicks', () => {
+  describe('incrementUrlClicks', () => {
     it('should increment clicks for the URL', async () => {
       const id = urlExampleFull._id;
       const query = {} as Query<UrlDocument, UrlDocument>;
@@ -144,7 +144,7 @@ describe('UrlService', () => {
         .fn()
         .mockResolvedValue({ ...urlExample, clicks: urlExample.clicks + 1 });
 
-      await urlService.incrementClicks(id);
+      await urlService.incrementUrlClicks(id);
 
       expect(urlModel.findByIdAndUpdate).toHaveBeenCalledWith(id, {
         $inc: { clicks: 1 },
@@ -154,7 +154,7 @@ describe('UrlService', () => {
     });
   });
 
-  describe('deleteManyByUserId', () => {
+  describe('deleteUrlsByUserIds', () => {
     it('should delete the URL(s) successfully', async () => {
       const userId = urlExampleFull.userId;
       const id = urlExampleFull._id;
@@ -164,7 +164,7 @@ describe('UrlService', () => {
       query.exec = jest.fn().mockResolvedValue({ deletedCount: ids.length });
       const mockDeletedUrl = ids.length;
 
-      const deletedUrl = await urlService.deleteManyByUserId(userId, ids);
+      const deletedUrl = await urlService.deleteUrlsByUserIds(userId, ids);
 
       expect(urlModel.deleteMany).toHaveBeenCalledWith({
         _id: { $in: ids },

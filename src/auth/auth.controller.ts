@@ -41,7 +41,12 @@ export class AuthController {
   @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
   async signup(@Body() signupAuthDto: SignupAuthDto) {
     const addedUser = await this.authService.signup(signupAuthDto);
-    return { message: 'User successfully created', data: addedUser };
+
+    return {
+      statusCode: 201,
+      message: 'User successfully created',
+      data: addedUser,
+    };
   }
 
   @Post('login')
@@ -65,12 +70,15 @@ export class AuthController {
     },
   })
   @ApiOkResponse({ description: 'Login success' })
-  @ApiBadRequestResponse({ description: 'Password is incorrect' })
+  @ApiBadRequestResponse({
+    description: 'Password is incorrect OR Email not yet verified',
+  })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
   async login(@Body() loginAuthDto: LoginAuthDto) {
     const tokens = await this.authService.login(loginAuthDto);
-    return { message: 'Login success', data: tokens };
+
+    return { statusCode: 200, message: 'Login success', data: tokens };
   }
 
   @ApiBearerAuth()
@@ -81,8 +89,11 @@ export class AuthController {
   @ApiNotFoundResponse({ description: 'User not found' })
   refresh(@Req() req: AuthenticatedRequest) {
     const { id } = req.user;
+
     const newAccessToken = this.authService.generateAccessToken({ sub: id });
+
     return {
+      statusCode: 200,
       message: 'Refresh token success',
       data: { accessToken: newAccessToken },
     };
@@ -101,7 +112,9 @@ export class AuthController {
     @Body() changePasswordAuthDto: ChangePasswordAuthDto,
   ) {
     const { id } = req.user;
+
     await this.authService.changePassword(id, changePasswordAuthDto);
-    return { message: 'Password successfully changed' };
+
+    return { statusCode: 200, message: 'Password successfully changed' };
   }
 }

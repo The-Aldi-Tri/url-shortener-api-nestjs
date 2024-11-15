@@ -36,16 +36,17 @@ describe('AuthService', () => {
   };
 
   const mockUserService = {
-    create: jest.fn(),
-    findOne: jest.fn(),
+    createUser: jest.fn(),
+    findUser: jest.fn(),
     getUserPassword: jest.fn(),
-    updateById: jest.fn(),
+    resetUserPassword: jest.fn(),
   };
 
   const userExample: User = {
     _id: new Types.ObjectId(),
     email: 'test@example.com',
     username: 'testUser',
+    is_verified: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -169,13 +170,14 @@ describe('AuthService', () => {
       const hashedPassword = userExampleFull.password;
       const mockCreatedUser = { ...userExample };
       authService.hash = jest.fn().mockResolvedValue(userExampleFull.password);
-      userService.create = jest.fn().mockResolvedValue({ ...userExample });
+      userService.createUser = jest.fn().mockResolvedValue({ ...userExample });
 
       const createdUser = await authService.signup(signupDto);
 
-      expect(userService.create).toHaveBeenCalledWith({
-        ...signupDto,
-        password: hashedPassword,
+      expect(userService.createUser).toHaveBeenCalledWith({
+        username: signupDto.username,
+        email: signupDto.email,
+        hashedPassword,
       });
       expect(createdUser).toEqual(mockCreatedUser);
     });
@@ -197,7 +199,7 @@ describe('AuthService', () => {
         accessToken: 'accessToken',
         refreshToken: 'refreshToken',
       };
-      userService.findOne = jest
+      userService.findUser = jest
         .fn()
         .mockResolvedValue({ ...userExample } as User);
       userService.getUserPassword = jest
@@ -214,11 +216,11 @@ describe('AuthService', () => {
       const result1 = await authService.login(loginDto1);
       const result2 = await authService.login(loginDto2);
 
-      expect(userService.findOne).toHaveBeenNthCalledWith(1, {
+      expect(userService.findUser).toHaveBeenNthCalledWith(1, {
         username: loginDto1.username,
         email: undefined,
       });
-      expect(userService.findOne).toHaveBeenNthCalledWith(2, {
+      expect(userService.findUser).toHaveBeenNthCalledWith(2, {
         email: loginDto2.email,
         username: undefined,
       });
@@ -293,7 +295,7 @@ describe('AuthService', () => {
       };
       const user: User = { ...userExample };
       const storedPassword = 'hashedPassword';
-      userService.findOne = jest
+      userService.findUser = jest
         .fn()
         .mockResolvedValue({ ...userExample } as User);
       userService.getUserPassword = jest
@@ -304,7 +306,7 @@ describe('AuthService', () => {
       await expect(authService.login(loginDto)).rejects.toThrow(
         new BadRequestException('Password is incorrect'),
       );
-      expect(userService.findOne).toHaveBeenCalledWith({
+      expect(userService.findUser).toHaveBeenCalledWith({
         username: loginDto.username,
         email: undefined,
       });
@@ -313,6 +315,24 @@ describe('AuthService', () => {
         loginDto.password,
         storedPassword,
       );
+    });
+
+    it('should throw BadRequestException for unverified email', async () => {
+      const loginDto: LoginAuthDto = {
+        username: userExampleFull.username,
+        password: 'password',
+      };
+      userService.findUser = jest
+        .fn()
+        .mockResolvedValue({ ...userExample, is_verified: false } as User);
+
+      await expect(authService.login(loginDto)).rejects.toThrow(
+        new BadRequestException('Please verify your email before logging in.'),
+      );
+      expect(userService.findUser).toHaveBeenCalledWith({
+        username: loginDto.username,
+        email: undefined,
+      });
     });
   });
 
@@ -330,7 +350,7 @@ describe('AuthService', () => {
         .mockResolvedValue('hashedOldPassword');
       authService.compareHash = jest.fn().mockResolvedValue(true);
       authService.hash = jest.fn().mockResolvedValue('hashedNewPassword');
-      userService.updateById = jest.fn().mockResolvedValue(undefined);
+      userService.resetUserPassword = jest.fn().mockResolvedValue(undefined);
 
       await authService.changePassword(id, changePasswordDto);
 

@@ -20,6 +20,9 @@ export class User {
   })
   password?: string;
 
+  @Prop({ default: false })
+  is_verified: boolean;
+
   @Prop({
     select: false,
   })

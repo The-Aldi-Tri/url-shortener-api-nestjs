@@ -34,8 +34,9 @@ export class UserAuthController {
   @ApiNotFoundResponse({ description: 'User not found' })
   async findOne(@Req() req: AuthenticatedRequest) {
     const { id } = req.user;
-    const user = await this.userService.findById(id);
+    const user = await this.userService.findUserById(id);
     return {
+      statusCode: 200,
       message: 'User successfully retrieved',
       data: user,
     };
@@ -46,19 +47,8 @@ export class UserAuthController {
   @ApiBody({
     type: UpdateUserAuthDto,
     examples: {
-      'Update email only': {
+      'Update username': {
         value: {
-          email: 'userv2@example.com',
-        },
-      },
-      'Update username only': {
-        value: {
-          username: 'user123v2',
-        },
-      },
-      'Update email and username': {
-        value: {
-          email: 'userv2@example.com',
           username: 'user123v2',
         },
       },
@@ -72,12 +62,11 @@ export class UserAuthController {
     @Req() req: AuthenticatedRequest,
     @Body() updateUserAuthDto: UpdateUserAuthDto,
   ) {
+    const { username } = updateUserAuthDto;
     const { id } = req.user;
-    const updatedUser = await this.userService.updateById(
-      id,
-      updateUserAuthDto,
-    );
+    const updatedUser = await this.userService.updateUserUsername(id, username);
     return {
+      statusCode: 200,
       message: 'User successfully updated',
       data: updatedUser,
     };
@@ -91,8 +80,9 @@ export class UserAuthController {
   @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
   async remove(@Req() req: AuthenticatedRequest) {
     const { id } = req.user;
-    const deletedUser = await this.userService.removeById(id);
+    const deletedUser = await this.userService.deleteUser(id);
     return {
+      statusCode: 200,
       message: 'User successfully deleted',
       data: deletedUser,
     };

@@ -48,18 +48,18 @@ describe('Auth routes (e2e)', () => {
         .send({ ...requestBody });
 
       expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty(
-        'message',
-        'User successfully created',
-      );
-      expect(response.body).toHaveProperty(
-        'data',
+      expect(response.body).toEqual(
         expect.objectContaining({
-          _id: expect.any(String),
-          email: requestBody.email,
-          username: requestBody.username,
-          createdAt: expect.any(String),
-          updatedAt: expect.any(String),
+          statusCode: 201,
+          message: 'User successfully created',
+          data: expect.objectContaining({
+            _id: expect.any(String),
+            email: requestBody.email,
+            username: requestBody.username,
+            createdAt: expect.any(String),
+            updatedAt: expect.any(String),
+            is_verified: false,
+          }),
         }),
       );
       expect(Types.ObjectId.isValid(response.body.data._id)).toBe(true);
@@ -113,16 +113,16 @@ describe('Auth routes (e2e)', () => {
 
   describe('POST /auth/login', () => {
     it('should return 200 and tokens when user exists and password matches', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User3@example.com',
-        password: 'StrongPa5$3',
+        password: await authService.hash('StrongPa5$3'),
         username: 'User3',
-      };
+        is_verified: true,
+      });
       const requestBody = {
-        email: user.email,
-        password: user.password,
+        username: user.username,
+        password: 'StrongPa5$3',
       };
-      await authService.signup({ ...user });
 
       const response = await request(app.getHttpServer())
         .post('/auth/login')
@@ -131,6 +131,7 @@ describe('Auth routes (e2e)', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(
         expect.objectContaining({
+          statusCode: 200,
           message: 'Login success',
           data: expect.objectContaining({
             accessToken: expect.any(String),
@@ -150,7 +151,7 @@ describe('Auth routes (e2e)', () => {
       ).not.toThrow(JsonWebTokenError);
     });
 
-    it('should return 400 when user not found', async () => {
+    it('should return 404 when user not found', async () => {
       const requestBody = {
         email: 'User4@example.com',
         password: 'StrongPa5$4',
@@ -171,16 +172,16 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 400 when password is incorrect', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User5@example.com',
         username: 'User5',
-        password: 'StrongPa5$5',
-      };
+        password: await authService.hash('StrongPa5$5'),
+        is_verified: true,
+      });
       const requestBody = {
         email: user.email,
         password: 'wrongPa5$',
       };
-      await authService.signup({ ...user });
 
       const response = await request(app.getHttpServer())
         .post('/auth/login')
@@ -195,20 +196,43 @@ describe('Auth routes (e2e)', () => {
         }),
       );
     });
+
+    it('should return 400 when user not verified', async () => {
+      const user = await userModel.create({
+        email: 'User5@example.com',
+        username: 'User5',
+        password: await authService.hash('StrongPa5$5'),
+        is_verified: false,
+      });
+      const requestBody = {
+        email: user.email,
+        password: 'StrongPa5$5',
+      };
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ ...requestBody });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'Please verify your email before logging in.',
+        }),
+      );
+    });
   });
 
   describe('GET /auth/refresh', () => {
     it('should return 200 and refreshed token when user is authenticated', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User6@example.com',
         username: 'User6',
-        password: 'StrongPa5$6',
-      };
-      await authService.signup({ ...user });
-      const { refreshToken } = await authService.login({
-        username: user.username,
-        password: user.password,
+        password: await authService.hash('StrongPa5$6'),
+        is_verified: true,
       });
+      const refreshToken = authService.generateRefreshToken({ sub: user._id });
 
       const response = await request(app.getHttpServer())
         .get('/auth/refresh')
@@ -218,6 +242,7 @@ describe('Auth routes (e2e)', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(
         expect.objectContaining({
+          statusCode: 200,
           message: 'Refresh token success',
           data: { accessToken: expect.any(String) },
         }),
@@ -230,20 +255,17 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 401 when refresh token is invalid', async () => {
-      const user = {
+      await userModel.create({
         email: 'User7@example.com',
         username: 'User7',
-        password: 'StrongPa5$7',
-      };
-      await authService.signup({ ...user });
-      const { accessToken } = await authService.login({
-        username: user.username,
-        password: user.password,
+        password: await authService.hash('StrongPa5$7'),
+        is_verified: true,
       });
+      const refreshToken = 'invalid token';
 
       const response = await request(app.getHttpServer())
         .get('/auth/refresh')
-        .set('Authorization', 'Bearer ' + accessToken)
+        .set('Authorization', 'Bearer ' + refreshToken)
         .send();
 
       expect(response.status).toBe(401);
@@ -252,19 +274,16 @@ describe('Auth routes (e2e)', () => {
 
   describe('POST /auth/change-password', () => {
     it('should return 200 when change password success', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User8@example.com',
         username: 'User8',
-        password: 'StrongPa5$8',
-      };
-      await authService.signup({ ...user });
-      const { accessToken } = await authService.login({
-        username: user.username,
-        password: user.password,
+        password: await authService.hash('StrongPa5$8'),
+        is_verified: true,
       });
+      const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
-        password: user.password,
-        newPassword: user.password + 'v2',
+        password: 'StrongPa5$8',
+        newPassword: 'StrongPa5$8' + 'v2',
       };
 
       const response = await request(app.getHttpServer())
@@ -275,22 +294,20 @@ describe('Auth routes (e2e)', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(
         expect.objectContaining({
+          statusCode: 200,
           message: 'Password successfully changed',
         }),
       );
     });
 
     it('should return 400 when password incorrect', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User9@example.com',
         username: 'User9',
-        password: 'StrongPa5$9',
-      };
-      await authService.signup({ ...user });
-      const { accessToken } = await authService.login({
-        username: user.username,
-        password: user.password,
+        password: await authService.hash('StrongPa5$9'),
+        is_verified: true,
       });
+      const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
         password: 'WrongStrongPa5$9',
         newPassword: user.password + 'v2',
@@ -312,16 +329,13 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 422 when password and new password are the same', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User10@example.com',
         username: 'User10',
-        password: 'StrongPa5$10',
-      };
-      await authService.signup({ ...user });
-      const { accessToken } = await authService.login({
-        username: user.username,
-        password: user.password,
+        password: await authService.hash('StrongPa5$10'),
+        is_verified: true,
       });
+      const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
         password: user.password,
         newPassword: user.password,

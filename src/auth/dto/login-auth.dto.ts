@@ -15,10 +15,10 @@ export class LoginAuthDto extends PickType(SignupAuthDto, [
 ] as const) {
   @ApiProperty({
     description:
-      'Username (only support letters[A-Za-z], numbers[0-9], hyphens[-], and underscores[_]',
+      'Username (only support letters[A-Za-z], numbers[0-9], hyphens[-], underscores[_] and dot [.]',
     minLength: 3,
     maxLength: 30,
-    pattern: '/^[A-Za-z0-9-_]+$/',
+    pattern: '/^[A-Za-z0-9-_.]+$/',
     required: false,
     example: 'user123',
   })
@@ -26,9 +26,9 @@ export class LoginAuthDto extends PickType(SignupAuthDto, [
   @IsString()
   @IsNotEmpty()
   @Length(3, 30)
-  @Matches(/^[A-Za-z0-9-_]+$/, {
+  @Matches(/^[A-Za-z0-9-_.]+$/, {
     message:
-      'Username must contain only letters, numbers, hyphens, or underscores',
+      'Username must contain only letters, numbers, hyphens, underscores and dot',
   })
   username?: string;
 

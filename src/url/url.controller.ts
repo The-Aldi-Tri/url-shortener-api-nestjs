@@ -41,9 +41,13 @@ export class UrlController {
   ) {
     const { id } = req.user;
 
-    const createdUrl = await this.urlService.create(id, createUrlDto);
+    const createdUrl = await this.urlService.createUrl(id, createUrlDto);
 
-    return { message: 'Url successfully created', data: createdUrl };
+    return {
+      statusCode: 201,
+      message: 'Url successfully created',
+      data: createdUrl,
+    };
   }
 
   @ApiBearerAuth()
@@ -57,7 +61,11 @@ export class UrlController {
 
     const urls = await this.urlService.findUrlsByUserId(id);
 
-    return { message: 'Url(s) successfully retrieved', data: urls };
+    return {
+      statusCode: 200,
+      message: 'Url(s) successfully retrieved',
+      data: urls,
+    };
   }
 
   @Get(':shorten')
@@ -65,11 +73,11 @@ export class UrlController {
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'Url or user not found' })
   async findOne(@Param('shorten') shorten: string) {
-    const url = await this.urlService.findByShorten(shorten);
+    const url = await this.urlService.findUrlByShorten(shorten);
 
-    await this.urlService.incrementClicks(url._id);
+    await this.urlService.incrementUrlClicks(url._id);
 
-    return { message: 'Original url found', data: url.origin };
+    return { statusCode: 200, message: 'Original url found', data: url.origin };
   }
 
   @ApiBearerAuth()
@@ -86,11 +94,14 @@ export class UrlController {
     const { id: userId } = req.user;
     const { idsToDelete } = deleteUrlDto;
 
-    const deleteCount = await this.urlService.deleteManyByUserId(
+    const deleteCount = await this.urlService.deleteUrlsByUserIds(
       userId,
       idsToDelete,
     );
 
-    return { message: `${deleteCount} Url(s) successfully deleted` };
+    return {
+      statusCode: 200,
+      message: `${deleteCount} Url(s) successfully deleted`,
+    };
   }
 }

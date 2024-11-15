@@ -4,7 +4,6 @@ import { Model, Types } from 'mongoose';
 import { User } from './schema/user.schema';
 import { CreateUserType } from './type/CreateUser.type';
 import { IdentifierUserType } from './type/IdentifierUser.type';
-import { UpdateUserType } from './type/UpdateUser.type';
 
 @Injectable()
 export class UserService {
@@ -12,12 +11,13 @@ export class UserService {
     @InjectModel(User.name) private readonly userModel: Model<User>,
   ) {}
 
-  // About lean https://mongoosejs.com/docs/api/query.html#Query.prototype.lean()
+  async createUser(userData: CreateUserType): Promise<User> {
+    const addedUserDoc = await this.userModel.create({
+      ...userData,
+      password: userData.hashedPassword,
+    });
 
-  async create(userData: CreateUserType): Promise<User> {
-    const userDoc = await this.userModel.create(userData);
-
-    const addedUser = userDoc.toObject();
+    const addedUser = addedUserDoc.toObject();
 
     delete addedUser.password;
     delete addedUser.__v;
@@ -25,7 +25,7 @@ export class UserService {
     return addedUser;
   }
 
-  async findById(id: Types.ObjectId): Promise<User> {
+  async findUserById(id: Types.ObjectId): Promise<User> {
     const user = await this.userModel.findById(id).lean().exec();
 
     if (!user) {
@@ -35,7 +35,7 @@ export class UserService {
     return user;
   }
 
-  async findOne(identifier: IdentifierUserType): Promise<User> {
+  async findUser(identifier: IdentifierUserType): Promise<User> {
     const user = await this.userModel
       .findOne({
         $or: [{ email: identifier.email }, { username: identifier.username }],
@@ -50,14 +50,18 @@ export class UserService {
     return user;
   }
 
-  async updateById(
+  async resetUserPassword(
     id: Types.ObjectId,
-    updateUserData: UpdateUserType,
+    newHashedPassword: string,
   ): Promise<User> {
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, updateUserData, {
-        returnDocument: 'after',
-      })
+      .findByIdAndUpdate(
+        id,
+        { password: newHashedPassword },
+        {
+          returnDocument: 'after',
+        },
+      )
       .lean()
       .exec();
 
@@ -68,7 +72,29 @@ export class UserService {
     return updatedUser;
   }
 
-  async removeById(id: Types.ObjectId): Promise<User> {
+  async updateUserUsername(
+    id: Types.ObjectId,
+    newUsername: string,
+  ): Promise<User> {
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        id,
+        { username: newUsername },
+        {
+          returnDocument: 'after',
+        },
+      )
+      .lean()
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException(`User not found`);
+    }
+
+    return updatedUser;
+  }
+
+  async deleteUser(id: Types.ObjectId): Promise<User> {
     const deletedUser = await this.userModel
       .findByIdAndDelete(id)
       .lean()
@@ -94,5 +120,22 @@ export class UserService {
     }
 
     return user.password;
+  }
+
+  async verifyUserByEmail(email: string): Promise<void> {
+    const verifiedUser = await this.userModel
+      .findOneAndUpdate(
+        { email },
+        {
+          is_verified: true,
+        },
+        { returnDocument: 'after' },
+      )
+      .lean()
+      .exec();
+
+    if (!verifiedUser) {
+      throw new NotFoundException('User not found');
+    }
   }
 }

@@ -8,15 +8,13 @@ import { Url } from './schema/url.schema';
 export class UrlService {
   constructor(@InjectModel(Url.name) private readonly urlModel: Model<Url>) {}
 
-  // About lean https://mongoosejs.com/docs/api/query.html#Query.prototype.lean()
-
-  async create(
+  async createUrl(
     userId: Types.ObjectId,
     createUrlDto: CreateUrlDto,
   ): Promise<Url> {
-    const addedUrl = (
-      await this.urlModel.create({ ...createUrlDto, userId })
-    ).toObject();
+    const addedUrlDoc = await this.urlModel.create({ ...createUrlDto, userId });
+
+    const addedUrl = addedUrlDoc.toObject();
 
     delete addedUrl.__v;
 
@@ -33,7 +31,7 @@ export class UrlService {
     return urls;
   }
 
-  async findByShorten(shorten: string): Promise<Url> {
+  async findUrlByShorten(shorten: string): Promise<Url> {
     const url = await this.urlModel.findOne({ shorten }).lean().exec();
 
     if (!url) {
@@ -43,27 +41,14 @@ export class UrlService {
     return url;
   }
 
-  async incrementClicks(id: Types.ObjectId): Promise<void> {
+  async incrementUrlClicks(id: Types.ObjectId): Promise<void> {
     await this.urlModel
       .findByIdAndUpdate(id, { $inc: { clicks: 1 } })
       .lean()
       .exec();
   }
 
-  async remove(userId: Types.ObjectId, shorten: string): Promise<Url> {
-    const deletedUrl = await this.urlModel
-      .findOneAndDelete({ userId, shorten })
-      .lean()
-      .exec();
-
-    if (!deletedUrl) {
-      throw new NotFoundException(`Url not found`);
-    }
-
-    return deletedUrl;
-  }
-
-  async deleteManyByUserId(userId: Types.ObjectId, ids: Types.ObjectId[]) {
+  async deleteUrlsByUserIds(userId: Types.ObjectId, ids: Types.ObjectId[]) {
     const { deletedCount } = await this.urlModel
       .deleteMany({ _id: { $in: ids }, userId })
       .exec();

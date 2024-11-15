@@ -14,8 +14,8 @@ import { JwtPayload } from './type/JwtPayload.type';
 export class AuthService {
   constructor(
     private readonly configService: ConfigService,
-    private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    private readonly userService: UserService,
   ) {}
 
   generateAccessToken(payload: JwtPayload): string {
@@ -48,11 +48,15 @@ export class AuthService {
   }
 
   async signup(signupAuthDto: SignupAuthDto): Promise<User> {
-    const { password } = signupAuthDto;
+    const { email, username, password } = signupAuthDto;
 
-    signupAuthDto.password = await this.hash(password);
+    const hashedPassword = await this.hash(password);
 
-    const createdUser = await this.userService.create(signupAuthDto);
+    const createdUser = await this.userService.createUser({
+      email,
+      username,
+      hashedPassword,
+    });
 
     return createdUser;
   }
@@ -62,7 +66,13 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const { username, email, password } = loginAuthDto;
 
-    const user = await this.userService.findOne({ username, email });
+    const user = await this.userService.findUser({ username, email });
+
+    if (!user.is_verified) {
+      throw new BadRequestException(
+        'Please verify your email before logging in.',
+      );
+    }
 
     const storedPassword = await this.userService.getUserPassword(user._id);
 
@@ -83,9 +93,9 @@ export class AuthService {
     id: Types.ObjectId,
     changePasswordAuthDto: ChangePasswordAuthDto,
   ): Promise<void> {
-    const { password, newPassword } = changePasswordAuthDto;
-
     const storedPassword = await this.userService.getUserPassword(id);
+
+    const { password, newPassword } = changePasswordAuthDto;
 
     const isPasswordMatch = await this.compareHash(password, storedPassword);
     if (!isPasswordMatch) {
@@ -93,6 +103,6 @@ export class AuthService {
     }
 
     const newHashedPassword = await this.hash(newPassword);
-    await this.userService.updateById(id, { password: newHashedPassword });
+    await this.userService.resetUserPassword(id, newHashedPassword);
   }
 }

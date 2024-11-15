@@ -11,11 +11,11 @@ describe('UrlController', () => {
   let urlService: UrlService;
 
   const mockUrlService = {
-    create: jest.fn(),
+    createUrl: jest.fn(),
     findUrlsByUserId: jest.fn(),
     findByShorten: jest.fn(),
-    incrementClicks: jest.fn(),
-    remove: jest.fn(),
+    incrementUrlClicks: jest.fn(),
+    deleteUrlsByUserIds: jest.fn(),
   };
 
   const urlExample = {
@@ -59,15 +59,19 @@ describe('UrlController', () => {
       };
       const createdUrl = { ...urlExample };
       const mockResult = {
+        statusCode: 201,
         message: 'Url successfully created',
         data: createdUrl,
       };
-      urlService.create = jest.fn().mockResolvedValue({ ...urlExample });
+      urlService.createUrl = jest.fn().mockResolvedValue({ ...urlExample });
 
       const result = await urlController.create(req, createUrlDto);
 
       expect(result).toEqual(mockResult);
-      expect(urlService.create).toHaveBeenCalledWith(req.user.id, createUrlDto);
+      expect(urlService.createUrl).toHaveBeenCalledWith(
+        req.user.id,
+        createUrlDto,
+      );
     });
   });
 
@@ -78,6 +82,7 @@ describe('UrlController', () => {
       } as AuthenticatedRequest;
       const urls = [{ ...urlExample }];
       const mockResult = {
+        statusCode: 200,
         message: 'Url(s) successfully retrieved',
         data: urls,
       };
@@ -96,15 +101,19 @@ describe('UrlController', () => {
     it('should redirect to the original URL successfully', async () => {
       const shorten = urlExampleFull.shorten;
       const url = { ...urlExample };
-      const mockResult = { message: 'Original url found', data: url.origin };
-      urlService.findByShorten = jest.fn().mockResolvedValue(url);
-      urlService.incrementClicks = jest.fn().mockResolvedValue(undefined);
+      const mockResult = {
+        statusCode: 200,
+        message: 'Original url found',
+        data: url.origin,
+      };
+      urlService.findUrlByShorten = jest.fn().mockResolvedValue(url);
+      urlService.incrementUrlClicks = jest.fn().mockResolvedValue(undefined);
 
       const result = await urlController.findOne(shorten);
 
       expect(result).toEqual(mockResult);
-      expect(urlService.findByShorten).toHaveBeenCalledWith(shorten);
-      expect(urlService.incrementClicks).toHaveBeenCalledWith(url._id);
+      expect(urlService.findUrlByShorten).toHaveBeenCalledWith(shorten);
+      expect(urlService.incrementUrlClicks).toHaveBeenCalledWith(url._id);
     });
   });
 
@@ -117,39 +126,20 @@ describe('UrlController', () => {
       const ids: DeleteUrlDto = { idsToDelete: [id] };
       const deleteCount = ids.idsToDelete.length;
       const mockResult = {
+        statusCode: 200,
         message: `${deleteCount} Url(s) successfully deleted`,
       };
-      urlService.deleteManyByUserId = jest
+      urlService.deleteUrlsByUserIds = jest
         .fn()
         .mockResolvedValue(ids.idsToDelete.length);
 
       const result = await urlController.remove(req, ids);
 
       expect(result).toEqual(mockResult);
-      expect(urlService.deleteManyByUserId).toHaveBeenCalledWith(
+      expect(urlService.deleteUrlsByUserIds).toHaveBeenCalledWith(
         req.user.id,
         ids.idsToDelete,
       );
     });
   });
-
-  // describe('remove', () => {
-  //   it('should return deleted URL successfully', async () => {
-  //     const req = {
-  //       user: { id: urlExampleFull.userId },
-  //     } as AuthenticatedRequest;
-  //     const shorten = urlExampleFull.shorten;
-  //     const deletedUrl = { ...urlExample };
-  //     const mockResult = {
-  //       message: 'Url successfully deleted',
-  //       data: deletedUrl,
-  //     };
-  //     urlService.remove = jest.fn().mockResolvedValue({ ...urlExample });
-
-  //     const result = await urlController.remove(req, shorten);
-
-  //     expect(result).toEqual(mockResult);
-  //     expect(urlService.remove).toHaveBeenCalledWith(req.user.id, shorten);
-  //   });
-  // });
 });

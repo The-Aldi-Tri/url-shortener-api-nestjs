@@ -1,0 +1,92 @@
+doctype html
+html(lang="en")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport", content="width=device-width, initial-scale=1.0")
+    title Email Verification
+    style.
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f7f7f7;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .header h1 {
+        font-size: 28px;
+        color: #333333;
+      }
+      .body-text {
+        font-size: 16px;
+        line-height: 1.5;
+        color: #555555;
+        margin-bottom: 20px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 15px 30px;
+        background-color: #007BFF;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 5px;
+        font-size: 16px;
+        font-weight: bold;
+        text-align: center;
+      }
+      .btn:hover {
+        background-color: #0056b3;
+      }
+      .footer {
+        text-align: center;
+        font-size: 14px;
+        color: #888888;
+        margin-top: 30px;
+      }
+      .divider {
+        border-top: 1px solid #e0e0e0;
+        text-align: center;
+        margin: 20px 0;
+        font-size: 12px;
+        font-weight: normal;
+      }
+
+  body
+    .container
+      .header
+        h1 Email Verification
+
+      div(class="divider")
+
+      .body-text
+        p Hi <strong>#{username}</strong>,
+        p Thank you for signing up with us. Please verify your email address to complete the registration process.
+
+        p Your verification code is <strong>#{otp}</strong> (Valid for 5 minutes).
+        p
+          | Enter this code on our 
+          a(href=websiteVerificationLink) website
+          |  to activate your account.
+
+        p Alternatively, you can simply click the button below to verify your email address:
+
+      div(style="text-align: center;")
+        a(href=directVerificationLink, class="btn") Verify Now
+
+      .footer
+        p If you did not create an account, please ignore this email.
+        p <strong>Please do not reply to this email.<strong>
+      
+      div(class="divider")
+        p &copy; <script>document.write(new Date().getFullYear());</script> aldi-dev.online

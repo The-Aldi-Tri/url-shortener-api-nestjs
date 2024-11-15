@@ -31,16 +31,13 @@ describe('Users routes (e2e)', () => {
 
   describe('GET /users', () => {
     it('should return 200 and user', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User11@example.com',
-        password: 'StrongPa5$11',
+        password: await authService.hash('StrongPa5$11'),
         username: 'User11',
-      };
-      await authService.signup({ ...user });
-      const { accessToken } = await authService.login({
-        username: user.username,
-        password: user.password,
+        is_verified: true,
       });
+      const accessToken = authService.generateAccessToken({ sub: user._id });
 
       const response = await request(app.getHttpServer())
         .get('/users')
@@ -50,6 +47,7 @@ describe('Users routes (e2e)', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(
         expect.objectContaining({
+          statusCode: 200,
           message: 'User successfully retrieved',
           data: expect.objectContaining({
             _id: expect.any(String),
@@ -57,6 +55,7 @@ describe('Users routes (e2e)', () => {
             username: user.username,
             createdAt: expect.any(String),
             updatedAt: expect.any(String),
+            is_verified: true,
           }),
         }),
       );
@@ -68,20 +67,16 @@ describe('Users routes (e2e)', () => {
 
   describe('PATCH /users', () => {
     it('should return 200 and updated user', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User12@example.com',
-        password: 'StrongPa5$12',
+        password: await authService.hash('StrongPa5$12'),
         username: 'User12',
-      };
+        is_verified: true,
+      });
+      const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
-        email: 'User12v2@example.com',
         username: 'User12v2',
       };
-      await authService.signup({ ...user });
-      const { accessToken } = await authService.login({
-        username: user.username,
-        password: user.password,
-      });
 
       const response = await request(app.getHttpServer())
         .patch('/users')
@@ -91,13 +86,15 @@ describe('Users routes (e2e)', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(
         expect.objectContaining({
+          statusCode: 200,
           message: 'User successfully updated',
           data: expect.objectContaining({
             _id: expect.any(String),
-            email: requestBody.email,
+            email: user.email,
             username: requestBody.username,
             createdAt: expect.any(String),
             updatedAt: expect.any(String),
+            is_verified: true,
           }),
         }),
       );
@@ -112,16 +109,13 @@ describe('Users routes (e2e)', () => {
 
   describe('DELETE /users', () => {
     it('should return 200 and deleted user', async () => {
-      const user = {
+      const user = await userModel.create({
         email: 'User13@example.com',
-        password: 'StrongPa5$13',
+        password: await authService.hash('StrongPa5$13'),
         username: 'User13',
-      };
-      await authService.signup({ ...user });
-      const { accessToken } = await authService.login({
-        username: user.username,
-        password: user.password,
+        is_verified: true,
       });
+      const accessToken = authService.generateAccessToken({ sub: user._id });
 
       const response = await request(app.getHttpServer())
         .delete('/users')
@@ -131,6 +125,7 @@ describe('Users routes (e2e)', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(
         expect.objectContaining({
+          statusCode: 200,
           message: 'User successfully deleted',
           data: expect.objectContaining({
             _id: expect.any(String),
@@ -138,6 +133,7 @@ describe('Users routes (e2e)', () => {
             username: user.username,
             createdAt: expect.any(String),
             updatedAt: expect.any(String),
+            is_verified: true,
           }),
         }),
       );

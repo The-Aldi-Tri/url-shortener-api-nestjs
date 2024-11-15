@@ -14,6 +14,7 @@ describe('UserAuthController', () => {
     _id: new Types.ObjectId(),
     email: 'test@example.com',
     username: 'testUser',
+    is_verified: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -49,15 +50,18 @@ describe('UserAuthController', () => {
       const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
       const user = { ...userExample };
       const mockResult = {
+        statusCode: 200,
         message: 'User successfully retrieved',
         data: user,
       };
-      userService.findById = jest.fn().mockResolvedValue({ ...userExample });
+      userService.findUserById = jest
+        .fn()
+        .mockResolvedValue({ ...userExample });
 
       const result = await userAuthController.findOne(req);
 
       expect(result).toEqual(mockResult);
-      expect(userService.findById).toHaveBeenCalledWith(req.user.id);
+      expect(userService.findUserById).toHaveBeenCalledWith(req.user.id);
     });
   });
 
@@ -70,10 +74,11 @@ describe('UserAuthController', () => {
         ...updateUserAuthDto,
       };
       const mockResult = {
+        statusCode: 200,
         message: 'User successfully updated',
         data: updatedUser,
       };
-      userService.updateById = jest.fn().mockResolvedValue({
+      userService.updateUserUsername = jest.fn().mockResolvedValue({
         ...userExample,
         ...updateUserAuthDto,
       });
@@ -81,9 +86,9 @@ describe('UserAuthController', () => {
       const result = await userAuthController.update(req, updateUserAuthDto);
 
       expect(result).toEqual(mockResult);
-      expect(userService.updateById).toHaveBeenCalledWith(
+      expect(userService.updateUserUsername).toHaveBeenCalledWith(
         req.user.id,
-        updateUserAuthDto,
+        updateUserAuthDto.username,
       );
     });
   });
@@ -93,15 +98,16 @@ describe('UserAuthController', () => {
       const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
       const deletedUser = { ...userExample };
       const mockResult = {
+        statusCode: 200,
         message: 'User successfully deleted',
         data: deletedUser,
       };
-      userService.removeById = jest.fn().mockResolvedValue({ ...userExample });
+      userService.deleteUser = jest.fn().mockResolvedValue({ ...userExample });
 
       const result = await userAuthController.remove(req);
 
       expect(result).toEqual(mockResult);
-      expect(userService.removeById).toHaveBeenCalledWith(req.user.id);
+      expect(userService.deleteUser).toHaveBeenCalledWith(req.user.id);
     });
   });
 });
