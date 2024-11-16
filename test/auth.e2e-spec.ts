@@ -8,8 +8,13 @@ import * as request from 'supertest';
 import { AuthService } from '../src/auth/auth.service';
 import { User } from '../src/user/schema/user.schema';
 import { AppModule } from './../src/app.module';
+import { createUserRecord } from './utils/createUserRecord';
+import { faker } from './utils/faker';
+import { generateStrongPassword } from './utils/generateStrongPassword';
 
 describe('Auth routes (e2e)', () => {
+  let seed = 100;
+
   let app: INestApplication;
   let userModel: Model<User>;
   let authService: AuthService;
@@ -28,9 +33,13 @@ describe('Auth routes (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    seed++;
+    faker.seed(seed);
   });
 
   afterEach(async () => {
+    faker.seed();
     await userModel.deleteMany({});
     await app.close();
   });
@@ -38,9 +47,9 @@ describe('Auth routes (e2e)', () => {
   describe('POST /auth/signup', () => {
     it('should return 201 when signup successful', async () => {
       const requestBody = {
-        username: 'User1',
-        email: 'User1@example.com',
-        password: 'StrongPa5$1',
+        username: faker.internet.username(),
+        email: faker.internet.email(),
+        password: generateStrongPassword(),
       };
 
       const response = await request(app.getHttpServer())
@@ -86,13 +95,13 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 409 when user already exists', async () => {
+      const { user } = await createUserRecord(userModel, authService);
       const requestBody = {
-        username: 'User2',
-        email: 'User2@example.com',
-        password: 'StrongPa5$2',
+        username: user.username,
+        email: user.email,
+        password: generateStrongPassword(),
       };
 
-      await authService.signup({ ...requestBody });
       const response = await request(app.getHttpServer())
         .post('/auth/signup')
         .send({ ...requestBody });
@@ -113,15 +122,10 @@ describe('Auth routes (e2e)', () => {
 
   describe('POST /auth/login', () => {
     it('should return 200 and tokens when user exists and password matches', async () => {
-      const user = await userModel.create({
-        email: 'User3@example.com',
-        password: await authService.hash('StrongPa5$3'),
-        username: 'User3',
-        is_verified: true,
-      });
+      const { user, password } = await createUserRecord(userModel, authService);
       const requestBody = {
         username: user.username,
-        password: 'StrongPa5$3',
+        password: password,
       };
 
       const response = await request(app.getHttpServer())
@@ -153,8 +157,8 @@ describe('Auth routes (e2e)', () => {
 
     it('should return 404 when user not found', async () => {
       const requestBody = {
-        email: 'User4@example.com',
-        password: 'StrongPa5$4',
+        email: faker.internet.email(),
+        password: generateStrongPassword(),
       };
 
       const response = await request(app.getHttpServer())
@@ -172,15 +176,10 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 400 when password is incorrect', async () => {
-      const user = await userModel.create({
-        email: 'User5@example.com',
-        username: 'User5',
-        password: await authService.hash('StrongPa5$5'),
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const requestBody = {
         email: user.email,
-        password: 'wrongPa5$',
+        password: 'incorrect' + generateStrongPassword(),
       };
 
       const response = await request(app.getHttpServer())
@@ -198,15 +197,14 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 400 when user not verified', async () => {
-      const user = await userModel.create({
-        email: 'User5@example.com',
-        username: 'User5',
-        password: await authService.hash('StrongPa5$5'),
-        is_verified: false,
-      });
+      const { user, password } = await createUserRecord(
+        userModel,
+        authService,
+        false,
+      );
       const requestBody = {
         email: user.email,
-        password: 'StrongPa5$5',
+        password: password,
       };
 
       const response = await request(app.getHttpServer())
@@ -226,12 +224,7 @@ describe('Auth routes (e2e)', () => {
 
   describe('GET /auth/refresh', () => {
     it('should return 200 and refreshed token when user is authenticated', async () => {
-      const user = await userModel.create({
-        email: 'User6@example.com',
-        username: 'User6',
-        password: await authService.hash('StrongPa5$6'),
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const refreshToken = authService.generateRefreshToken({ sub: user._id });
 
       const response = await request(app.getHttpServer())
@@ -255,12 +248,6 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 401 when refresh token is invalid', async () => {
-      await userModel.create({
-        email: 'User7@example.com',
-        username: 'User7',
-        password: await authService.hash('StrongPa5$7'),
-        is_verified: true,
-      });
       const refreshToken = 'invalid token';
 
       const response = await request(app.getHttpServer())
@@ -274,16 +261,11 @@ describe('Auth routes (e2e)', () => {
 
   describe('POST /auth/change-password', () => {
     it('should return 200 when change password success', async () => {
-      const user = await userModel.create({
-        email: 'User8@example.com',
-        username: 'User8',
-        password: await authService.hash('StrongPa5$8'),
-        is_verified: true,
-      });
+      const { user, password } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
-        password: 'StrongPa5$8',
-        newPassword: 'StrongPa5$8' + 'v2',
+        password: password,
+        newPassword: password + 'v2',
       };
 
       const response = await request(app.getHttpServer())
@@ -301,16 +283,11 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 400 when password incorrect', async () => {
-      const user = await userModel.create({
-        email: 'User9@example.com',
-        username: 'User9',
-        password: await authService.hash('StrongPa5$9'),
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
-        password: 'WrongStrongPa5$9',
-        newPassword: user.password + 'v2',
+        password: 'incorrect' + generateStrongPassword(),
+        newPassword: generateStrongPassword() + 'v2',
       };
 
       const response = await request(app.getHttpServer())
@@ -329,16 +306,11 @@ describe('Auth routes (e2e)', () => {
     });
 
     it('should return 422 when password and new password are the same', async () => {
-      const user = await userModel.create({
-        email: 'User10@example.com',
-        username: 'User10',
-        password: await authService.hash('StrongPa5$10'),
-        is_verified: true,
-      });
+      const { user, password } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
-        password: user.password,
-        newPassword: user.password,
+        password: password,
+        newPassword: password,
       };
 
       const response = await request(app.getHttpServer())

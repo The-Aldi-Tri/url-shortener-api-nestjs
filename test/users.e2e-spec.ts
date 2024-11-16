@@ -6,8 +6,12 @@ import * as request from 'supertest';
 import { AuthService } from '../src/auth/auth.service';
 import { User } from '../src/user/schema/user.schema';
 import { AppModule } from './../src/app.module';
+import { createUserRecord } from './utils/createUserRecord';
+import { faker } from './utils/faker';
 
 describe('Users routes (e2e)', () => {
+  let seed = 0;
+
   let app: INestApplication;
   let userModel: Model<User>;
   let authService: AuthService;
@@ -22,21 +26,20 @@ describe('Users routes (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    seed++;
+    faker.seed(seed);
   });
 
   afterEach(async () => {
+    faker.seed();
     await userModel.deleteMany({});
     await app.close();
   });
 
   describe('GET /users', () => {
     it('should return 200 and user', async () => {
-      const user = await userModel.create({
-        email: 'User11@example.com',
-        password: await authService.hash('StrongPa5$11'),
-        username: 'User11',
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
 
       const response = await request(app.getHttpServer())
@@ -67,15 +70,10 @@ describe('Users routes (e2e)', () => {
 
   describe('PATCH /users', () => {
     it('should return 200 and updated user', async () => {
-      const user = await userModel.create({
-        email: 'User12@example.com',
-        password: await authService.hash('StrongPa5$12'),
-        username: 'User12',
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
-        username: 'User12v2',
+        username: faker.internet.username() + 'v2',
       };
 
       const response = await request(app.getHttpServer())
@@ -109,12 +107,7 @@ describe('Users routes (e2e)', () => {
 
   describe('DELETE /users', () => {
     it('should return 200 and deleted user', async () => {
-      const user = await userModel.create({
-        email: 'User13@example.com',
-        password: await authService.hash('StrongPa5$13'),
-        username: 'User13',
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
 
       const response = await request(app.getHttpServer())

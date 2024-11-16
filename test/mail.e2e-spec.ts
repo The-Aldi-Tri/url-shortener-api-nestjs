@@ -7,8 +7,11 @@ import { AppModule } from '../src/app.module';
 import { AuthService } from '../src/auth/auth.service';
 import { Otp } from '../src/mail/schema/otp.schema';
 import { User } from '../src/user/schema/user.schema';
+import { createUserRecord } from './utils/createUserRecord';
+import { faker } from './utils/faker';
 
 describe('Mail routes (e2e)', () => {
+  let seed = 300;
   let app: INestApplication;
   let userModel: Model<User>;
   let otpModel: Model<Otp>;
@@ -25,9 +28,13 @@ describe('Mail routes (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    seed++;
+    faker.seed(seed);
   });
 
   afterEach(async () => {
+    faker.seed();
     await userModel.deleteMany({});
     await otpModel.deleteMany({});
     await app.close();
@@ -36,8 +43,8 @@ describe('Mail routes (e2e)', () => {
   describe('POST /mail/send', () => {
     it('should return 200', async () => {
       const requestBody = {
-        email: 'User@example.com',
-        username: 'User',
+        email: faker.internet.email(),
+        username: faker.internet.username(),
       };
 
       const response = await request(app.getHttpServer())
@@ -56,12 +63,7 @@ describe('Mail routes (e2e)', () => {
 
   describe('GET /mail/verify', () => {
     it('should return 200', async () => {
-      const user = await userModel.create({
-        email: 'User14@example.com',
-        username: 'User14',
-        password: await authService.hash('StrongPa5$14'),
-        is_verified: false,
-      });
+      const { user } = await createUserRecord(userModel, authService, false);
       const otpDoc = await otpModel.create({ email: user.email, otp: 123456 });
 
       const response = await request(app.getHttpServer())

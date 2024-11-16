@@ -18,7 +18,8 @@
         "esbenp.prettier-vscode",
         "pflannery.vscode-versionlens",
         "YoavBls.pretty-ts-errors",
-        "firsttris.vscode-jest-runner"
+        "firsttris.vscode-jest-runner",
+        "ChakrounAnas.turbo-console-log"
       ]
     }
   }

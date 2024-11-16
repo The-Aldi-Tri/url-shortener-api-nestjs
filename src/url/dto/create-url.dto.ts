@@ -15,13 +15,13 @@ export class CreateUrlDto {
     description: 'The shorten url.',
     minLength: 3,
     maxLength: 30,
-    pattern: '/^[A-Za-z0-9-_.]+$/',
+    pattern: '/^[A-Za-z0-9-_.]{3,30}$/',
     example: 'abc',
   })
   @IsString()
   @IsNotEmpty()
   @Length(3, 30)
-  @Matches(/^[A-Za-z0-9-_.]+$/, {
+  @Matches(/^[A-Za-z0-9-_.]{3,30}$/, {
     message:
       'shorten must contain only letters, numbers, hyphens, underscores and dot',
   })

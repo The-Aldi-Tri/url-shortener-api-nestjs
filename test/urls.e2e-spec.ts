@@ -8,8 +8,12 @@ import { DeleteUrlDto } from '../src/url/dto/delete-url.dto';
 import { Url } from '../src/url/schema/url.schema';
 import { User } from '../src/user/schema/user.schema';
 import { AppModule } from './../src/app.module';
+import { createUserRecord } from './utils/createUserRecord';
+import { faker } from './utils/faker';
 
 describe('Urls routes (e2e)', () => {
+  let seed = 200;
+
   let app: INestApplication;
   let userModel: Model<User>;
   let urlModel: Model<Url>;
@@ -26,9 +30,13 @@ describe('Urls routes (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    seed++;
+    faker.seed(seed);
   });
 
   afterEach(async () => {
+    faker.seed();
     await urlModel.deleteMany({});
     await userModel.deleteMany({});
     await app.close();
@@ -36,16 +44,11 @@ describe('Urls routes (e2e)', () => {
 
   describe('POST /urls', () => {
     it('should return 201 and created url', async () => {
-      const user = await userModel.create({
-        email: 'User14@example.com',
-        username: 'User14',
-        password: await authService.hash('StrongPa5$14'),
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const requestBody = {
-        origin: 'https://google.com',
-        shorten: 'abc123',
+        origin: faker.internet.url(),
+        shorten: faker.internet.domainWord(),
       };
 
       const response = await request(app.getHttpServer())
@@ -75,17 +78,12 @@ describe('Urls routes (e2e)', () => {
 
   describe('GET /urls', () => {
     it('should return 200 and url(s)', async () => {
-      const user = await userModel.create({
-        email: 'User15@example.com',
-        username: 'User15',
-        password: await authService.hash('StrongPa5$15'),
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const url = await urlModel.create({
         userId: user._id,
-        origin: 'https://google.com',
-        shorten: 'abc123',
+        origin: faker.internet.url(),
+        shorten: faker.internet.domainWord(),
       });
 
       const response = await request(app.getHttpServer())
@@ -117,17 +115,12 @@ describe('Urls routes (e2e)', () => {
 
   describe('GET /urls/:shorten', () => {
     it('should return origin url', async () => {
-      const user = await userModel.create({
-        email: 'User16@example.com',
-        username: 'User16',
-        password: await authService.hash('StrongPa5$16'),
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const url = await urlModel.create({
         userId: user._id,
-        origin: 'https://google.com',
-        shorten: 'abc123',
+        origin: faker.internet.url(),
+        shorten: faker.internet.domainWord(),
       });
 
       const response = await request(app.getHttpServer())
@@ -148,17 +141,12 @@ describe('Urls routes (e2e)', () => {
 
   describe('DELETE /urls', () => {
     it('should return 200', async () => {
-      const user = await userModel.create({
-        email: 'User17@example.com',
-        username: 'User17',
-        password: await authService.hash('StrongPa5$17'),
-        is_verified: true,
-      });
+      const { user } = await createUserRecord(userModel, authService);
       const accessToken = authService.generateAccessToken({ sub: user._id });
       const url = await urlModel.create({
         userId: user._id,
-        origin: 'https://google.com',
-        shorten: 'abc123',
+        origin: faker.internet.url(),
+        shorten: faker.internet.domainWord(),
       });
       const requestBody: DeleteUrlDto = { idsToDelete: [url._id] };
 
