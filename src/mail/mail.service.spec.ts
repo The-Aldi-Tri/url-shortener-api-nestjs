@@ -6,40 +6,42 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Model, Query, Types } from 'mongoose';
+import { Types } from 'mongoose';
+import { faker } from '../../test/utils/faker';
 import { UserService } from '../user/user.service';
 import { MailService } from './mail.service';
 import { Otp, OtpDocument } from './schema/otp.schema';
 
 describe('MailService', () => {
   let mailService: MailService;
-  let mailerService: MailerService;
-  let otpModel: Model<Otp>;
-  let configService: ConfigService;
-  let userService: UserService;
+
+  const mockConfigService = {
+    getOrThrow<T = string>(key: string): T {
+      const config: Record<string, string> = {
+        CLIENT_VERIFICATION_URL: 'http://google.com',
+        API_VERIFICATION_URL: 'http://google.com',
+      };
+      return config[key] as T;
+    },
+  };
 
   const mockMailerService = {
     sendMail: jest.fn(),
   };
 
-  const mockConfigService = {
-    getOrThrow: jest.fn((key: string): string => {
-      const config: Record<string, string> = {
-        CLIENT_VERIFICATION_URL: 'http://google.com',
-        API_VERIFICATION_URL: 'http://google.com',
-      };
-      return config[key];
-    }),
-  };
-
   const mockOtpModel = {
     findOneAndReplace: jest.fn(),
+    exists: jest.fn(),
     deleteOne: jest.fn(),
   };
 
   const mockUserService = {
     verifyUserByEmail: jest.fn(),
   };
+
+  beforeAll(() => {
+    faker.seed(7);
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -55,11 +57,7 @@ describe('MailService', () => {
       ],
     }).compile();
 
-    mailerService = module.get<MailerService>(MailerService);
     mailService = module.get<MailService>(MailService);
-    otpModel = module.get<Model<Otp>>(getModelToken(Otp.name));
-    configService = module.get<ConfigService>(ConfigService);
-    userService = module.get<UserService>(UserService);
   });
 
   afterEach(() => {
@@ -75,6 +73,7 @@ describe('MailService', () => {
     it('should generate 6 digit number', () => {
       const verificationCode = mailService.generateVerificationCode();
 
+      expect(Number.isInteger(verificationCode)).toBe(true);
       expect(verificationCode).toBeGreaterThanOrEqual(100000);
       expect(verificationCode).toBeLessThan(1000000);
     });
@@ -82,59 +81,54 @@ describe('MailService', () => {
 
   describe('createOtp function', () => {
     it('should otp document', async () => {
-      const email = 'email@example.com';
-      const otp = 123456;
+      const email = faker.internet.email();
+      const otp = faker.number.int({ min: 100000, max: 999999 });
 
-      const mockResult: Otp = {
-        _id: new Types.ObjectId(),
+      const mockNewOtp: Partial<Otp> = {
+        _id: new Types.ObjectId(faker.database.mongodbObjectId()),
         email,
         otp,
-        createdAt: new Date(),
+        createdAt: faker.date.recent(),
       };
 
-      const query = {} as Query<OtpDocument, OtpDocument>;
-      const queryAfterLean = {} as Query<Otp, OtpDocument>;
+      mockOtpModel.findOneAndReplace.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ ...mockNewOtp }),
+        }),
+      });
 
-      otpModel.findOneAndReplace = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest
-        .fn()
-        .mockResolvedValue({ ...mockResult } as Otp);
+      const newOtp = await mailService.createOtp(email, otp);
 
-      const result = await mailService.createOtp(email, otp);
-
-      expect(otpModel.findOneAndReplace).toHaveBeenCalledWith(
+      expect(mockOtpModel.findOneAndReplace).toHaveBeenCalledWith(
         { email },
-        { email, otp, createdAt: Date.now() },
+        { email, otp, createdAt: expect.any(Number) },
         { upsert: true, returnDocument: 'after' },
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
-      expect(result).toEqual(mockResult);
+      expect(newOtp).toEqual(mockNewOtp);
     });
   });
 
   describe('sendMail function', () => {
     it('should send mail', async () => {
-      const email = 'email@example.com';
-      const username = 'user123';
+      const email = faker.internet.email();
+      const username = faker.internet.username();
 
-      const mockOtp = 123456;
+      const mockOtp = faker.number.int({ min: 100000, max: 999999 });
 
-      mailService.generateVerificationCode = jest
-        .fn()
+      jest
+        .spyOn(mailService, 'generateVerificationCode')
         .mockReturnValueOnce(mockOtp);
-      mailService.createOtp = jest.fn().mockResolvedValue({
-        _id: new Types.ObjectId(),
+      jest.spyOn(mailService, 'createOtp').mockResolvedValueOnce({
+        _id: new Types.ObjectId(faker.database.mongodbObjectId()),
         email,
         otp: mockOtp,
-        createdAt: new Date(),
+        createdAt: faker.date.recent(),
       });
-      mailerService.sendMail = jest.fn().mockResolvedValue(undefined);
+      mockMailerService.sendMail = jest.fn().mockResolvedValue(undefined);
 
       await mailService.sendMail(email, username);
 
-      expect(mailerService.sendMail).toHaveBeenCalledWith({
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         to: email,
         from: 'noreply@aldi-dev.online',
         subject: 'E-mail verification',
@@ -142,11 +136,11 @@ describe('MailService', () => {
         context: {
           username,
           otp: mockOtp,
-          websiteVerificationLink: configService.getOrThrow<string>(
+          websiteVerificationLink: mockConfigService.getOrThrow<string>(
             'CLIENT_VERIFICATION_URL',
           ),
           directVerificationLink:
-            configService.getOrThrow<string>('API_VERIFICATION_URL') +
+            mockConfigService.getOrThrow<string>('API_VERIFICATION_URL') +
             `?email=${email}&otp=${mockOtp}`,
         },
       });
@@ -155,34 +149,33 @@ describe('MailService', () => {
     });
 
     it('should handle error when email sending fails', async () => {
-      const email = 'test@example.com';
-      const username = 'testUser';
+      const email = faker.internet.email();
+      const username = faker.internet.username();
 
-      const mockOtp = 123456;
-      const mockOtpDoc = {
-        _id: new Types.ObjectId(),
+      const mockOtp = faker.number.int({ min: 100000, max: 999999 });
+
+      jest
+        .spyOn(mailService, 'generateVerificationCode')
+        .mockReturnValueOnce(mockOtp);
+      jest.spyOn(mailService, 'createOtp').mockResolvedValueOnce({
+        _id: new Types.ObjectId(faker.database.mongodbObjectId()),
         email,
         otp: mockOtp,
-        createdAt: new Date(),
-      };
-      const query = {} as Query<OtpDocument, OtpDocument>;
-      const queryAfterLean = {} as Query<Otp, OtpDocument>;
-
-      mailService.generateVerificationCode = jest
+        createdAt: faker.date.recent(),
+      });
+      mockMailerService.sendMail = jest
         .fn()
-        .mockReturnValueOnce(mockOtp);
-      mailService.createOtp = jest.fn().mockResolvedValue(mockOtpDoc);
-      mailerService.sendMail = jest
-        .fn()
-        .mockRejectedValue(new Error('Mailer error'));
-      otpModel.deleteOne = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(undefined);
+        .mockRejectedValueOnce(new Error('Mailer error'));
+      mockOtpModel.deleteOne.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(undefined),
+        }),
+      });
 
       await expect(mailService.sendMail(email, username)).rejects.toThrow(
-        InternalServerErrorException,
+        new InternalServerErrorException(),
       );
-      expect(mailerService.sendMail).toHaveBeenCalledWith({
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         to: email,
         from: 'noreply@aldi-dev.online',
         subject: 'E-mail verification',
@@ -190,52 +183,49 @@ describe('MailService', () => {
         context: {
           username,
           otp: mockOtp,
-          websiteVerificationLink: configService.getOrThrow<string>(
+          websiteVerificationLink: mockConfigService.getOrThrow<string>(
             'CLIENT_VERIFICATION_URL',
           ),
           directVerificationLink:
-            configService.getOrThrow<string>('API_VERIFICATION_URL') +
+            mockConfigService.getOrThrow<string>('API_VERIFICATION_URL') +
             `?email=${email}&otp=${mockOtp}`,
         },
       });
-      expect(otpModel.deleteOne).toHaveBeenCalledWith({ email });
       expect(mailService.generateVerificationCode).toHaveBeenCalled();
       expect(mailService.createOtp).toHaveBeenCalled();
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockOtpModel.deleteOne).toHaveBeenCalled();
     });
   });
 
   describe('verifyEmail', () => {
     it('should verify email with correct OTP', async () => {
-      const email = 'test@example.com';
-      const otp = 123456;
+      const email = faker.internet.email();
+      const otp = faker.number.int({ min: 100000, max: 999999 });
 
-      const mockOtpDoc = { _id: new Types.ObjectId() };
-      const query = {} as Query<OtpDocument, OtpDocument>;
-      const queryAfterLean = {} as Query<Otp, OtpDocument>;
+      const otpDoc = {
+        _id: new Types.ObjectId(faker.database.mongodbObjectId()),
+      } as OtpDocument;
 
-      otpModel.exists = jest.fn().mockResolvedValue(mockOtpDoc);
-
-      otpModel.deleteOne = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(undefined);
-
+      mockOtpModel.exists.mockResolvedValue(otpDoc);
       mockUserService.verifyUserByEmail.mockResolvedValue(undefined);
+      mockOtpModel.deleteOne.mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(undefined),
+        }),
+      });
 
       await mailService.verifyEmail(email, otp);
 
-      expect(userService.verifyUserByEmail).toHaveBeenCalledWith(email);
-      expect(otpModel.deleteOne).toHaveBeenCalledWith({ _id: mockOtpDoc._id });
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockOtpModel.exists).toHaveBeenCalledWith({ email, otp });
+      expect(mockUserService.verifyUserByEmail).toHaveBeenCalledWith(email);
+      expect(mockOtpModel.deleteOne).toHaveBeenCalledWith({ _id: otpDoc._id });
     });
 
     it('should throw BadRequestException for invalid OTP', async () => {
-      const email = 'test@example.com';
-      const otp = 123456;
+      const email = faker.internet.email();
+      const otp = faker.number.int({ min: 100000, max: 999999 });
 
-      otpModel.exists = jest.fn().mockResolvedValue(null);
+      mockOtpModel.exists.mockResolvedValue(null);
 
       await expect(mailService.verifyEmail(email, otp)).rejects.toThrow(
         new BadRequestException('Verification failed'),

@@ -70,7 +70,7 @@ export class AuthService {
 
     if (!user.is_verified) {
       throw new BadRequestException(
-        'Please verify your email before logging in.',
+        'Please verify your email before logging in',
       );
     }
 

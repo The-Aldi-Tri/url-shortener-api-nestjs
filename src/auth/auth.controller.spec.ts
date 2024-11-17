@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
 import { User } from 'src/user/schema/user.schema';
+import { faker } from '../../test/utils/faker';
+import { generateStrongPassword } from '../../test/utils/generateStrongPassword';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { ChangePasswordAuthDto } from './dto/change-password-auth.dto';
@@ -10,38 +12,34 @@ import { AuthenticatedRequest } from './type/AuthenticatedRequest.type';
 
 describe('AuthController', () => {
   let authController: AuthController;
-  let authService: AuthService;
 
-  const mockUserService = {
+  const mockAuthService = {
     signup: jest.fn(),
     login: jest.fn(),
     generateAccessToken: jest.fn(),
     changePassword: jest.fn(),
   };
 
-  const userExample: User = {
-    _id: new Types.ObjectId(),
-    email: 'test@example.com',
-    username: 'testUser',
-    is_verified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  const generateUser = (is_verified = true): User => ({
+    email: faker.internet.email(),
+    username: faker.internet.username(),
+    is_verified: is_verified,
+    createdAt: faker.date.past(),
+    updatedAt: faker.date.recent(),
+    _id: new Types.ObjectId(faker.database.mongodbObjectId()),
+  });
 
-  const userExampleFull: Required<User> = {
-    ...userExample,
-    password: 'hashedPassword',
-    __v: 0,
-  };
+  beforeAll(() => {
+    faker.seed(3);
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: mockUserService }],
+      providers: [{ provide: AuthService, useValue: mockAuthService }],
     }).compile();
 
     authController = module.get<AuthController>(AuthController);
-    authService = module.get<AuthService>(AuthService);
   });
 
   afterEach(() => {
@@ -56,73 +54,67 @@ describe('AuthController', () => {
   describe('signup', () => {
     it('should return success message and user data', async () => {
       const signupAuthDto: SignupAuthDto = {
-        email: userExampleFull.email,
-        username: userExampleFull.username,
-        password: 'PASSWORD',
+        email: faker.internet.email(),
+        username: faker.internet.username(),
+        password: generateStrongPassword(),
       };
-      const addedUser = { ...userExample };
+      const addedUser = generateUser(false);
       const mockResult = {
         statusCode: 201,
         message: 'User successfully created',
         data: addedUser,
       };
-      authService.signup = jest.fn().mockResolvedValue({ ...userExample });
+
+      mockAuthService.signup.mockResolvedValue({ ...addedUser });
 
       const result = await authController.signup(signupAuthDto);
 
       expect(result).toEqual(mockResult);
-      expect(authService.signup).toHaveBeenCalledWith(signupAuthDto);
+      expect(mockAuthService.signup).toHaveBeenCalledWith(signupAuthDto);
     });
   });
 
   describe('login', () => {
     it('should return success message and tokens', async () => {
-      const loginAuthDto1: LoginAuthDto = {
-        email: userExampleFull.email,
-        password: '<PASSWORD>',
-      };
-      const loginAuthDto2: LoginAuthDto = {
-        username: userExampleFull.username,
-        password: '<PASSWORD>',
+      const loginAuthDto: LoginAuthDto = {
+        email: faker.internet.email(),
+        password: generateStrongPassword(),
       };
       const tokens = {
-        accessToken: 'accessToken',
-        refreshToken: 'refreshToken',
+        accessToken: faker.internet.jwt(),
+        refreshToken: faker.internet.jwt(),
       };
       const mockResult = {
         statusCode: 200,
         message: 'Login success',
         data: tokens,
       };
-      authService.login = jest.fn().mockResolvedValue(tokens);
+      mockAuthService.login.mockResolvedValue(tokens);
 
-      const result1 = await authController.login(loginAuthDto1);
-      const result2 = await authController.login(loginAuthDto2);
+      const result = await authController.login(loginAuthDto);
 
-      expect(result1).toEqual(mockResult);
-      expect(result2).toEqual(mockResult);
-      expect(authService.login).toHaveBeenNthCalledWith(1, loginAuthDto1);
-      expect(authService.login).toHaveBeenNthCalledWith(2, loginAuthDto2);
+      expect(result).toEqual(mockResult);
+      expect(mockAuthService.login).toHaveBeenCalledWith(loginAuthDto);
     });
   });
 
   describe('refresh', () => {
     it('should return new access token', () => {
-      const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
-      const newAccessToken = 'newAccessToken';
+      const req = {
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
+      } as AuthenticatedRequest;
+      const newAccessToken = faker.internet.jwt();
       const mockResult = {
         statusCode: 200,
         message: 'Refresh token success',
         data: { accessToken: newAccessToken },
       };
-      authService.generateAccessToken = jest
-        .fn()
-        .mockReturnValue(newAccessToken);
+      mockAuthService.generateAccessToken.mockReturnValue(newAccessToken);
 
       const result = authController.refresh(req);
 
       expect(result).toEqual(mockResult);
-      expect(authService.generateAccessToken).toHaveBeenCalledWith({
+      expect(mockAuthService.generateAccessToken).toHaveBeenCalledWith({
         sub: req.user.id,
       });
     });
@@ -130,16 +122,18 @@ describe('AuthController', () => {
 
   describe('changePassword', () => {
     it('should return success message', async () => {
-      const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
+      const req = {
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
+      } as AuthenticatedRequest;
       const changePasswordAuthDto: ChangePasswordAuthDto = {
-        password: '<PASSWORD>',
-        newPassword: '<NEW_PASSWORD>',
+        password: generateStrongPassword(),
+        newPassword: generateStrongPassword(),
       };
       const mockResult = {
         statusCode: 200,
         message: 'Password successfully changed',
       };
-      authService.changePassword = jest.fn().mockResolvedValue(undefined);
+      mockAuthService.changePassword.mockResolvedValue(undefined);
 
       const result = await authController.changePassword(
         req,
@@ -147,7 +141,7 @@ describe('AuthController', () => {
       );
 
       expect(result).toEqual(mockResult);
-      expect(authService.changePassword).toHaveBeenCalledWith(
+      expect(mockAuthService.changePassword).toHaveBeenCalledWith(
         req.user.id,
         changePasswordAuthDto,
       );

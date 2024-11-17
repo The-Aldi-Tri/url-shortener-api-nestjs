@@ -92,6 +92,13 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "coveragePathIgnorePatterns": [
+      "/main\\.ts$",
+      ".*\\.module\\.ts$",
+      ".*\\.filter\\.ts$",
+      ".*\\.middleware\\.ts$",
+      ".*\\.logger\\.ts$"
+    ]
   }
 }

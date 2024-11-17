@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
+import { faker } from '../../test/utils/faker';
 import { AuthenticatedRequest } from '../auth/type/AuthenticatedRequest.type';
 import { User } from '../user/schema/user.schema';
 import { UserService } from '../user/user.service';
@@ -8,28 +9,25 @@ import { UserAuthController } from './user-auth.controller';
 
 describe('UserAuthController', () => {
   let userAuthController: UserAuthController;
-  let userService: UserService;
-
-  const userExample: User = {
-    _id: new Types.ObjectId(),
-    email: 'test@example.com',
-    username: 'testUser',
-    is_verified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const userExampleFull: Required<User> = {
-    ...userExample,
-    password: 'hashedPassword',
-    __v: 0,
-  };
 
   const mockUserService = {
-    findById: jest.fn(),
-    updateById: jest.fn(),
-    removeById: jest.fn(),
+    findUserById: jest.fn(),
+    updateUserUsername: jest.fn(),
+    deleteUser: jest.fn(),
   };
+
+  const generateUser = (is_verified = true): User => ({
+    email: faker.internet.email(),
+    username: faker.internet.username(),
+    is_verified: is_verified,
+    createdAt: faker.date.past(),
+    updatedAt: faker.date.recent(),
+    _id: new Types.ObjectId(faker.database.mongodbObjectId()),
+  });
+
+  beforeAll(() => {
+    faker.seed(4);
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -38,7 +36,6 @@ describe('UserAuthController', () => {
     }).compile();
 
     userAuthController = module.get<UserAuthController>(UserAuthController);
-    userService = module.get<UserService>(UserService);
   });
 
   it('should be defined', () => {
@@ -47,46 +44,55 @@ describe('UserAuthController', () => {
 
   describe('findOne', () => {
     it('should return the user successfully', async () => {
-      const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
-      const user = { ...userExample };
+      const req = {
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
+      } as AuthenticatedRequest;
+
+      const user = generateUser();
+      user._id = req.user.id;
+
       const mockResult = {
         statusCode: 200,
         message: 'User successfully retrieved',
         data: user,
       };
-      userService.findUserById = jest
-        .fn()
-        .mockResolvedValue({ ...userExample });
+      mockUserService.findUserById.mockResolvedValue({ ...user });
 
       const result = await userAuthController.findOne(req);
 
       expect(result).toEqual(mockResult);
-      expect(userService.findUserById).toHaveBeenCalledWith(req.user.id);
+      expect(mockUserService.findUserById).toHaveBeenCalledWith(req.user.id);
     });
   });
 
   describe('update', () => {
     it('should return the updated user successfully', async () => {
-      const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
-      const updateUserAuthDto: UpdateUserAuthDto = { username: 'newUserName' };
+      const req = {
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
+      } as AuthenticatedRequest;
+
+      const updateUserAuthDto: UpdateUserAuthDto = {
+        username: faker.internet.username(),
+      };
+
       const updatedUser = {
-        ...userExample,
+        ...generateUser(),
+        _id: req.user.id,
         ...updateUserAuthDto,
       };
+
       const mockResult = {
         statusCode: 200,
         message: 'User successfully updated',
         data: updatedUser,
       };
-      userService.updateUserUsername = jest.fn().mockResolvedValue({
-        ...userExample,
-        ...updateUserAuthDto,
-      });
+
+      mockUserService.updateUserUsername.mockResolvedValue({ ...updatedUser });
 
       const result = await userAuthController.update(req, updateUserAuthDto);
 
       expect(result).toEqual(mockResult);
-      expect(userService.updateUserUsername).toHaveBeenCalledWith(
+      expect(mockUserService.updateUserUsername).toHaveBeenCalledWith(
         req.user.id,
         updateUserAuthDto.username,
       );
@@ -95,19 +101,24 @@ describe('UserAuthController', () => {
 
   describe('remove', () => {
     it('should return the deleted user successfully', async () => {
-      const req = { user: { id: userExampleFull._id } } as AuthenticatedRequest;
-      const deletedUser = { ...userExample };
+      const req = {
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
+      } as AuthenticatedRequest;
+
+      const deletedUser = generateUser();
+      deletedUser._id = req.user.id;
+
       const mockResult = {
         statusCode: 200,
         message: 'User successfully deleted',
         data: deletedUser,
       };
-      userService.deleteUser = jest.fn().mockResolvedValue({ ...userExample });
+      mockUserService.deleteUser.mockResolvedValue({ ...deletedUser });
 
       const result = await userAuthController.remove(req);
 
       expect(result).toEqual(mockResult);
-      expect(userService.deleteUser).toHaveBeenCalledWith(req.user.id);
+      expect(mockUserService.deleteUser).toHaveBeenCalledWith(req.user.id);
     });
   });
 });

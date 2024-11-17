@@ -94,7 +94,7 @@ export class UrlController {
     const { id: userId } = req.user;
     const { idsToDelete } = deleteUrlDto;
 
-    const deleteCount = await this.urlService.deleteUrlsByUserIds(
+    const deleteCount = await this.urlService.deleteUrlsByIds(
       userId,
       idsToDelete,
     );

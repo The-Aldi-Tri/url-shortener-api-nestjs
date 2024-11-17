@@ -48,7 +48,7 @@ export class UrlService {
       .exec();
   }
 
-  async deleteUrlsByUserIds(userId: Types.ObjectId, ids: Types.ObjectId[]) {
+  async deleteUrlsByIds(userId: Types.ObjectId, ids: Types.ObjectId[]) {
     const { deletedCount } = await this.urlModel
       .deleteMany({ _id: { $in: ids }, userId })
       .exec();

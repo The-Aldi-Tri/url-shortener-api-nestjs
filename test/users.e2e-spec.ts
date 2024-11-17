@@ -10,11 +10,13 @@ import { createUserRecord } from './utils/createUserRecord';
 import { faker } from './utils/faker';
 
 describe('Users routes (e2e)', () => {
-  let seed = 0;
-
   let app: INestApplication;
   let userModel: Model<User>;
   let authService: AuthService;
+
+  beforeAll(() => {
+    faker.seed(101);
+  });
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -26,13 +28,9 @@ describe('Users routes (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
-
-    seed++;
-    faker.seed(seed);
   });
 
   afterEach(async () => {
-    faker.seed();
     await userModel.deleteMany({});
     await app.close();
   });

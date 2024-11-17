@@ -1,39 +1,40 @@
 import { NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Model, Query, Types } from 'mongoose';
-import { User, UserDocument } from './schema/user.schema';
+import * as bcrypt from 'bcrypt';
+import { Types } from 'mongoose';
+import { faker } from '../../test/utils/faker';
+import { generateStrongPassword } from '../../test/utils/generateStrongPassword';
+import { User } from './schema/user.schema';
 import { CreateUserType } from './type/CreateUser.type';
 import { IdentifierUserType } from './type/IdentifierUser.type';
 import { UserService } from './user.service';
 
 describe('UserService', () => {
   let userService: UserService;
-  let userModel: Model<User>;
-
-  const userExample: User = {
-    _id: new Types.ObjectId(),
-    email: 'test@example.com',
-    username: 'testUser',
-    is_verified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const userExampleFull: Required<User> = {
-    ...userExample,
-    password: 'hashedPassword',
-    __v: 0,
-  };
 
   const mockUserModel = {
     create: jest.fn(),
     findById: jest.fn(),
+    findOne: jest.fn(),
     findByIdAndUpdate: jest.fn(),
     findByIdAndDelete: jest.fn(),
-    findOne: jest.fn(),
     exists: jest.fn(),
+    findOneAndUpdate: jest.fn(),
   };
+
+  const generateUser = (is_verified = true): User => ({
+    email: faker.internet.email(),
+    username: faker.internet.username(),
+    is_verified: is_verified,
+    createdAt: faker.date.past(),
+    updatedAt: faker.date.recent(),
+    _id: new Types.ObjectId(faker.database.mongodbObjectId()),
+  });
+
+  beforeAll(() => {
+    faker.seed(1);
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -47,7 +48,6 @@ describe('UserService', () => {
     }).compile();
 
     userService = module.get<UserService>(UserService);
-    userModel = module.get<Model<User>>(getModelToken(User.name));
   });
 
   afterEach(() => {
@@ -61,416 +61,356 @@ describe('UserService', () => {
   describe('createUser function', () => {
     it('should create a new user and return it without password and __v', async () => {
       const userData: CreateUserType = {
-        email: userExampleFull.email,
-        username: userExampleFull.username,
-        hashedPassword: userExampleFull.password,
+        email: faker.internet.email(),
+        username: faker.internet.username(),
+        hashedPassword: await bcrypt.hash(generateStrongPassword(), 10),
       };
 
-      const mockUserDoc = {
-        ...userExample,
-      } as UserDocument;
+      const mockAddedUser: User = generateUser(false);
+      mockAddedUser.email = userData.email;
+      mockAddedUser.username = userData.username;
 
-      const mockAddedUser: User = {
-        ...userExample,
-      };
-
-      userModel.create = jest.fn().mockResolvedValue(mockUserDoc);
-      mockUserDoc.toObject = jest.fn().mockReturnValue({ ...userExample });
+      mockUserModel.create.mockResolvedValueOnce({
+        toObject: jest.fn().mockReturnValueOnce({ ...mockAddedUser }),
+      });
 
       const addedUser = await userService.createUser(userData);
 
-      expect(userModel.create).toHaveBeenCalledWith({
-        ...userData,
+      expect(mockUserModel.create).toHaveBeenCalledWith({
+        email: userData.email,
+        username: userData.username,
         password: userData.hashedPassword,
       });
-      expect(mockUserDoc.toObject).toHaveBeenCalled();
       expect(addedUser).toEqual(mockAddedUser);
+      expect(addedUser).not.toHaveProperty('password');
+      expect(addedUser).not.toHaveProperty('__v');
     });
   });
 
   describe('findUserById function', () => {
     it('should return user when found', async () => {
-      const id = userExampleFull._id;
-      const mockUser: User = { ...userExample };
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
+      const mockUser: User = generateUser();
+      mockUser._id = id;
 
-      userModel.findById = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest
-        .fn()
-        .mockResolvedValue({ ...userExample } as User);
+      mockUserModel.findById.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce({ ...mockUser }),
+        }),
+      });
 
       const user = await userService.findUserById(id);
 
-      expect(userModel.findById).toHaveBeenCalledWith(id);
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockUserModel.findById).toHaveBeenCalledWith(id);
       expect(user).toEqual(mockUser);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      const notRegisteredId = new Types.ObjectId();
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const query = {} as Query<null, UserDocument>;
-      const queryAfterLean = {} as Query<null, null>;
+      mockUserModel.findById.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce(null),
+        }),
+      });
 
-      userModel.findById = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(null);
-
-      await expect(userService.findUserById(notRegisteredId)).rejects.toThrow(
+      await expect(userService.findUserById(id)).rejects.toThrow(
         new NotFoundException(`User not found`),
       );
-      expect(userModel.findById).toHaveBeenCalledWith(notRegisteredId);
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockUserModel.findById).toHaveBeenCalledWith(id);
     });
   });
 
   describe('findUser function', () => {
     it('should return user when found by email or username', async () => {
-      const identifier1: IdentifierUserType = { email: userExampleFull.email };
-      const identifier2: IdentifierUserType = {
-        username: userExampleFull.username,
+      const username = faker.internet.username();
+
+      const identifier: IdentifierUserType = {
+        username: username,
       };
 
-      const mockUser1: User = { ...userExample };
-      const mockUser2: User = { ...userExample };
+      const mockUser: User = generateUser();
+      mockUser.username = username;
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
-
-      userModel.findOne = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest
-        .fn()
-        .mockResolvedValue({ ...userExample } as User);
-
-      const user1 = await userService.findUser(identifier1);
-      const user2 = await userService.findUser(identifier2);
-
-      expect(userModel.findOne).toHaveBeenNthCalledWith(1, {
-        $or: [{ email: identifier1.email }, { username: identifier1.username }],
+      mockUserModel.findOne.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce({ ...mockUser }),
+        }),
       });
-      expect(userModel.findOne).toHaveBeenNthCalledWith(2, {
-        $or: [{ email: identifier2.email }, { username: identifier2.username }],
+
+      const user = await userService.findUser(identifier);
+
+      expect(mockUserModel.findOne).toHaveBeenCalledWith({
+        $or: [{ email: identifier.email }, { username: identifier.username }],
       });
-      expect(query.lean).toHaveBeenCalledTimes(2);
-      expect(queryAfterLean.exec).toHaveBeenCalledTimes(2);
-      expect(user1).toEqual(mockUser1);
-      expect(user2).toEqual(mockUser2);
+      expect(user).toEqual(mockUser);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      const identifier: IdentifierUserType = { email: 'notRegisteredEmail' };
+      const identifier: IdentifierUserType = { email: faker.internet.email() };
 
-      const query = {} as Query<null, UserDocument>;
-      const queryAfterLean = {} as Query<null, null>;
-
-      userModel.findOne = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(null);
+      mockUserModel.findOne.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce(null),
+        }),
+      });
 
       expect(userService.findUser(identifier)).rejects.toThrow(
         new NotFoundException(`User not found`),
       );
-      expect(userModel.findOne).toHaveBeenCalledWith({
+      expect(mockUserModel.findOne).toHaveBeenCalledWith({
         $or: [{ email: identifier.email }, { username: identifier.username }],
       });
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
     });
   });
 
   describe('resetUserPassword function', () => {
     it('should reset password and return updated user', async () => {
-      const id = userExampleFull._id;
-      const newHashedPassword = 'newHashedPassword';
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
+      const newHashedPassword = await bcrypt.hash(generateStrongPassword(), 10);
 
-      const mockUpdatedUser: User = {
-        ...userExample,
-        password: newHashedPassword,
-      };
+      const mockUpdatedUser: User = generateUser();
+      mockUpdatedUser._id = id;
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
-
-      userModel.findByIdAndUpdate = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue({
-        ...userExample,
-        password: newHashedPassword,
-      } as User);
+      mockUserModel.findByIdAndUpdate.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce({ ...mockUpdatedUser }),
+        }),
+      });
 
       const updatedUser = await userService.resetUserPassword(
         id,
         newHashedPassword,
       );
 
-      expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
         id,
         { password: newHashedPassword },
         {
           returnDocument: 'after',
         },
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
       expect(updatedUser).toEqual(mockUpdatedUser);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      const notRegisteredId = new Types.ObjectId();
-      const newHashedPassword = 'newHashedPassword';
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
+      const newHashedPassword = await bcrypt.hash(generateStrongPassword(), 10);
 
-      const query = {} as Query<null, UserDocument>;
-      const queryAfterLean = {} as Query<null, null>;
-
-      userModel.findByIdAndUpdate = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(null);
+      mockUserModel.findByIdAndUpdate.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce(null),
+        }),
+      });
 
       await expect(
-        userService.resetUserPassword(notRegisteredId, newHashedPassword),
+        userService.resetUserPassword(id, newHashedPassword),
       ).rejects.toThrow(new NotFoundException(`User not found`));
-      expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
-        notRegisteredId,
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        id,
         { password: newHashedPassword },
         {
           returnDocument: 'after',
         },
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
     });
   });
 
   describe('updateUserUsername function', () => {
     it('should return updated user', async () => {
-      const id = userExampleFull._id;
-      const newUsername = 'testUser2';
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
+      const newUsername = faker.internet.username();
 
-      const mockUpdatedUser: User = {
-        ...userExample,
-        username: newUsername,
-      };
+      const mockUpdatedUser: User = generateUser();
+      mockUpdatedUser._id = id;
+      mockUpdatedUser.username = newUsername;
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
-
-      userModel.findByIdAndUpdate = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest
-        .fn()
-        .mockResolvedValue({ ...userExample, username: newUsername } as User);
+      mockUserModel.findByIdAndUpdate.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce({ ...mockUpdatedUser }),
+        }),
+      });
 
       const updatedUser = await userService.updateUserUsername(id, newUsername);
 
-      expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
         id,
         { username: newUsername },
         {
           returnDocument: 'after',
         },
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
       expect(updatedUser).toEqual(mockUpdatedUser);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      const notRegisteredId = new Types.ObjectId();
-      const newUsername = 'testUser2';
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
+      const newUsername = faker.internet.username();
 
-      const query = {} as Query<null, UserDocument>;
-      const queryAfterLean = {} as Query<null, null>;
-
-      userModel.findByIdAndUpdate = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(null);
+      mockUserModel.findByIdAndUpdate.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce(null),
+        }),
+      });
 
       await expect(
-        userService.updateUserUsername(notRegisteredId, newUsername),
+        userService.updateUserUsername(id, newUsername),
       ).rejects.toThrow(new NotFoundException(`User not found`));
-      expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
-        notRegisteredId,
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        id,
         { username: newUsername },
         {
           returnDocument: 'after',
         },
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
     });
   });
 
   describe('deleteUser function', () => {
     it('should return deleted user', async () => {
-      const id = userExampleFull._id;
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const mockDeletedUser: User = { ...userExample };
+      const mockDeletedUser: User = generateUser();
+      mockDeletedUser._id = id;
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
-
-      userModel.findByIdAndDelete = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest
-        .fn()
-        .mockResolvedValue({ ...userExample } as User);
+      mockUserModel.findByIdAndDelete.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce({ ...mockDeletedUser }),
+        }),
+      });
 
       const deletedUser = await userService.deleteUser(id);
 
-      expect(userModel.findByIdAndDelete).toHaveBeenCalledWith(id);
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledWith(id);
       expect(deletedUser).toEqual(mockDeletedUser);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      const notRegisteredId = new Types.ObjectId();
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const query = {} as Query<null, UserDocument>;
-      const queryAfterLean = {} as Query<null, null>;
+      mockUserModel.findByIdAndDelete.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce(null),
+        }),
+      });
 
-      userModel.findByIdAndDelete = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(null);
-
-      await expect(userService.deleteUser(notRegisteredId)).rejects.toThrow(
+      await expect(userService.deleteUser(id)).rejects.toThrow(
         new NotFoundException(`User not found`),
       );
-      expect(userModel.findByIdAndDelete).toHaveBeenCalledWith(notRegisteredId);
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledWith(id);
     });
   });
 
   describe('checkUserExist function', () => {
     it('should return true if user exists', async () => {
-      const id = userExampleFull._id;
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const query = {} as Query<UserDocument, UserDocument>;
+      const mockUser = { _id: id };
 
-      userModel.exists = jest.fn().mockReturnValue(query);
-      query.exec = jest.fn().mockResolvedValue({ _id: id });
+      mockUserModel.exists.mockReturnValueOnce({
+        exec: jest.fn().mockResolvedValueOnce({ ...mockUser }),
+      });
 
       const isExist = await userService.checkUserExist(id);
 
-      expect(userModel.exists).toHaveBeenCalledWith({ _id: id });
-      expect(query.exec).toHaveBeenCalled();
+      expect(mockUserModel.exists).toHaveBeenCalledWith({ _id: id });
       expect(isExist).toBe(true);
     });
 
     it('should return false if user does not exist', async () => {
-      const notRegisteredId = new Types.ObjectId();
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const query = {} as Query<null, UserDocument>;
+      mockUserModel.exists.mockReturnValueOnce({
+        exec: jest.fn().mockResolvedValueOnce(null),
+      });
 
-      userModel.exists = jest.fn().mockReturnValue(query);
-      query.exec = jest.fn().mockResolvedValue(null);
+      const isExist = await userService.checkUserExist(id);
 
-      const isExist = await userService.checkUserExist(notRegisteredId);
-
-      expect(userModel.exists).toHaveBeenCalledWith({ _id: notRegisteredId });
-      expect(query.exec).toHaveBeenCalled();
+      expect(mockUserModel.exists).toHaveBeenCalledWith({ _id: id });
       expect(isExist).toBe(false);
     });
   });
 
   describe('getUserPassword function', () => {
     it('should return user password', async () => {
-      const id = userExampleFull._id;
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const mockUser = { password: userExampleFull.password };
+      const mockUser: User = generateUser();
+      mockUser._id = id;
+      mockUser.password = await bcrypt.hash(generateStrongPassword(), 10);
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
-
-      userModel.findById = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest
-        .fn()
-        .mockResolvedValue({ password: userExampleFull.password });
+      mockUserModel.findById.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce({ ...mockUser }),
+        }),
+      });
 
       const userPassword = await userService.getUserPassword(id);
 
-      expect(userModel.findById).toHaveBeenCalledWith(id, 'password');
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockUserModel.findById).toHaveBeenCalledWith(id, '+password');
       expect(userPassword).toEqual(mockUser.password);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      const notRegisteredId = new Types.ObjectId();
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
 
-      const query = {} as Query<null, UserDocument>;
-      const queryAfterLean = {} as Query<null, null>;
+      mockUserModel.findById.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce(null),
+        }),
+      });
 
-      userModel.findById = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(null);
-
-      await expect(
-        userService.getUserPassword(notRegisteredId),
-      ).rejects.toThrow(new NotFoundException(`User not found`));
-      expect(userModel.findById).toHaveBeenCalledWith(
-        notRegisteredId,
-        'password',
+      await expect(userService.getUserPassword(id)).rejects.toThrow(
+        new NotFoundException(`User not found`),
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
+      expect(mockUserModel.findById).toHaveBeenCalledWith(id, '+password');
     });
   });
 
   describe('verifyUserByEmail function', () => {
     it('should verify user by email', async () => {
-      const email = userExampleFull.email;
+      const email = faker.internet.email();
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
+      const mockUser: User = generateUser();
+      mockUser.email = email;
 
-      userModel.findOneAndUpdate = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue({ ...userExample });
+      mockUserModel.findOneAndUpdate.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce({ mockUser }),
+        }),
+      });
 
       await userService.verifyUserByEmail(email);
 
-      expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
+      expect(mockUserModel.findOneAndUpdate).toHaveBeenCalledWith(
         { email },
         {
           is_verified: true,
         },
         { returnDocument: 'after' },
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
     });
 
     it('should throw error when user not found', async () => {
-      const email = 'not registered email';
+      const email = faker.internet.email();
 
-      const query = {} as Query<UserDocument, UserDocument>;
-      const queryAfterLean = {} as Query<User, UserDocument>;
-
-      userModel.findOneAndUpdate = jest.fn().mockReturnValue(query);
-      query.lean = jest.fn().mockReturnValue(queryAfterLean);
-      queryAfterLean.exec = jest.fn().mockResolvedValue(null);
+      mockUserModel.findOneAndUpdate.mockReturnValueOnce({
+        lean: jest.fn().mockReturnValueOnce({
+          exec: jest.fn().mockResolvedValueOnce(null),
+        }),
+      });
 
       await expect(userService.verifyUserByEmail(email)).rejects.toThrow(
         new NotFoundException(`User not found`),
       );
-      expect(userModel.findOneAndUpdate).toHaveBeenCalledWith(
+      expect(mockUserModel.findOneAndUpdate).toHaveBeenCalledWith(
         { email },
         {
           is_verified: true,
         },
         { returnDocument: 'after' },
       );
-      expect(query.lean).toHaveBeenCalled();
-      expect(queryAfterLean.exec).toHaveBeenCalled();
     });
   });
 });

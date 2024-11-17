@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
+import { faker } from '../../test/utils/faker';
 import { AuthenticatedRequest } from '../auth/type/AuthenticatedRequest.type';
 import { CreateUrlDto } from './dto/create-url.dto';
 import { DeleteUrlDto } from './dto/delete-url.dto';
@@ -8,31 +9,30 @@ import { UrlService } from './url.service';
 
 describe('UrlController', () => {
   let urlController: UrlController;
-  let urlService: UrlService;
 
   const mockUrlService = {
     createUrl: jest.fn(),
     findUrlsByUserId: jest.fn(),
-    findByShorten: jest.fn(),
+    findUrlByShorten: jest.fn(),
     incrementUrlClicks: jest.fn(),
-    deleteUrlsByUserIds: jest.fn(),
+    deleteUrlsByIds: jest.fn(),
   };
 
-  const urlExample = {
-    _id: new Types.ObjectId(),
-    clicks: 0,
-    origin: 'http://example.com',
-    shorten: 'abc',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    userId: new Types.ObjectId(),
-    _v: 0,
+  const generateUrl = (userId: Types.ObjectId | null = null) => {
+    return {
+      _id: new Types.ObjectId(faker.database.mongodbObjectId()),
+      origin: faker.internet.url(),
+      shorten: faker.internet.domainWord(),
+      userId: userId ?? new Types.ObjectId(faker.database.mongodbObjectId()),
+      clicks: 0,
+      createdAt: faker.date.past(),
+      updatedAt: faker.date.recent(),
+    };
   };
 
-  const urlExampleFull = {
-    ...urlExample,
-    _v: 0,
-  };
+  beforeAll(() => {
+    faker.seed(6);
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -41,7 +41,6 @@ describe('UrlController', () => {
     }).compile();
 
     urlController = module.get<UrlController>(UrlController);
-    urlService = module.get<UrlService>(UrlService);
   });
 
   it('should be defined', () => {
@@ -51,24 +50,28 @@ describe('UrlController', () => {
   describe('create', () => {
     it('should return created URL successfully', async () => {
       const req = {
-        user: { id: urlExampleFull.userId },
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
       } as AuthenticatedRequest;
+
       const createUrlDto: CreateUrlDto = {
-        origin: urlExampleFull.origin,
-        shorten: urlExampleFull.shorten,
+        origin: faker.internet.url(),
+        shorten: faker.internet.domainWord(),
       };
-      const createdUrl = { ...urlExample };
+
+      const createdUrl = generateUrl(req.user.id);
+
       const mockResult = {
         statusCode: 201,
         message: 'Url successfully created',
         data: createdUrl,
       };
-      urlService.createUrl = jest.fn().mockResolvedValue({ ...urlExample });
+
+      mockUrlService.createUrl.mockResolvedValue({ ...createdUrl });
 
       const result = await urlController.create(req, createUrlDto);
 
       expect(result).toEqual(mockResult);
-      expect(urlService.createUrl).toHaveBeenCalledWith(
+      expect(mockUrlService.createUrl).toHaveBeenCalledWith(
         req.user.id,
         createUrlDto,
       );
@@ -78,65 +81,75 @@ describe('UrlController', () => {
   describe('findAllByUserId', () => {
     it('should return all URLs for the user successfully', async () => {
       const req = {
-        user: { id: urlExampleFull.userId },
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
       } as AuthenticatedRequest;
-      const urls = [{ ...urlExample }];
+
+      const url = generateUrl(req.user.id);
+
+      const urls = [{ ...url }];
+
       const mockResult = {
         statusCode: 200,
         message: 'Url(s) successfully retrieved',
         data: urls,
       };
-      urlService.findUrlsByUserId = jest
-        .fn()
-        .mockResolvedValue([{ ...urlExample }]);
+
+      mockUrlService.findUrlsByUserId.mockResolvedValue([...urls]);
 
       const result = await urlController.findAllByUserId(req);
 
       expect(result).toEqual(mockResult);
-      expect(urlService.findUrlsByUserId).toHaveBeenCalledWith(req.user.id);
+      expect(mockUrlService.findUrlsByUserId).toHaveBeenCalledWith(req.user.id);
     });
   });
 
   describe('findOne', () => {
     it('should redirect to the original URL successfully', async () => {
-      const shorten = urlExampleFull.shorten;
-      const url = { ...urlExample };
+      const shorten = faker.internet.domainWord();
+
+      const url = generateUrl();
+      url.shorten = shorten;
+
       const mockResult = {
         statusCode: 200,
         message: 'Original url found',
         data: url.origin,
       };
-      urlService.findUrlByShorten = jest.fn().mockResolvedValue(url);
-      urlService.incrementUrlClicks = jest.fn().mockResolvedValue(undefined);
+
+      mockUrlService.findUrlByShorten.mockResolvedValue({ ...url });
+      mockUrlService.incrementUrlClicks.mockResolvedValue(undefined);
 
       const result = await urlController.findOne(shorten);
 
       expect(result).toEqual(mockResult);
-      expect(urlService.findUrlByShorten).toHaveBeenCalledWith(shorten);
-      expect(urlService.incrementUrlClicks).toHaveBeenCalledWith(url._id);
+      expect(mockUrlService.findUrlByShorten).toHaveBeenCalledWith(shorten);
+      expect(mockUrlService.incrementUrlClicks).toHaveBeenCalledWith(url._id);
     });
   });
 
   describe('remove', () => {
     it('should return deleted URL successfully', async () => {
       const req = {
-        user: { id: urlExampleFull.userId },
+        user: { id: new Types.ObjectId(faker.database.mongodbObjectId()) },
       } as AuthenticatedRequest;
-      const id = urlExampleFull._id;
-      const ids: DeleteUrlDto = { idsToDelete: [id] };
+
+      const urlId = new Types.ObjectId(faker.database.mongodbObjectId());
+
+      const ids: DeleteUrlDto = { idsToDelete: [urlId] };
+
       const deleteCount = ids.idsToDelete.length;
+
       const mockResult = {
         statusCode: 200,
         message: `${deleteCount} Url(s) successfully deleted`,
       };
-      urlService.deleteUrlsByUserIds = jest
-        .fn()
-        .mockResolvedValue(ids.idsToDelete.length);
+
+      mockUrlService.deleteUrlsByIds.mockResolvedValue(ids.idsToDelete.length);
 
       const result = await urlController.remove(req, ids);
 
       expect(result).toEqual(mockResult);
-      expect(urlService.deleteUrlsByUserIds).toHaveBeenCalledWith(
+      expect(mockUrlService.deleteUrlsByIds).toHaveBeenCalledWith(
         req.user.id,
         ids.idsToDelete,
       );

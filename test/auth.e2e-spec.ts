@@ -13,13 +13,15 @@ import { faker } from './utils/faker';
 import { generateStrongPassword } from './utils/generateStrongPassword';
 
 describe('Auth routes (e2e)', () => {
-  let seed = 100;
-
   let app: INestApplication;
   let userModel: Model<User>;
   let authService: AuthService;
   let jwtService: JwtService;
   let configService: ConfigService;
+
+  beforeAll(() => {
+    faker.seed(102);
+  });
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -33,13 +35,9 @@ describe('Auth routes (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
-
-    seed++;
-    faker.seed(seed);
   });
 
   afterEach(async () => {
-    faker.seed();
     await userModel.deleteMany({});
     await app.close();
   });
@@ -216,7 +214,7 @@ describe('Auth routes (e2e)', () => {
         expect.objectContaining({
           statusCode: 400,
           error: 'Bad Request',
-          message: 'Please verify your email before logging in.',
+          message: 'Please verify your email before logging in',
         }),
       );
     });

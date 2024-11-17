@@ -13,7 +13,8 @@ export class UserService {
 
   async createUser(userData: CreateUserType): Promise<User> {
     const addedUserDoc = await this.userModel.create({
-      ...userData,
+      email: userData.email,
+      username: userData.username,
       password: userData.hashedPassword,
     });
 
@@ -113,7 +114,7 @@ export class UserService {
   }
 
   async getUserPassword(id: Types.ObjectId): Promise<string> {
-    const user = await this.userModel.findById(id, 'password').lean().exec();
+    const user = await this.userModel.findById(id, '+password').lean().exec();
 
     if (!user || !user.password) {
       throw new NotFoundException(`User not found`);

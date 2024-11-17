@@ -4,6 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import { Types } from 'mongoose';
+import { faker } from '../../test/utils/faker';
+import { generateStrongPassword } from '../../test/utils/generateStrongPassword';
 import { User } from '../user/schema/user.schema';
 import { UserService } from '../user/user.service';
 import { AuthService } from './auth.service';
@@ -14,12 +16,9 @@ import { JwtPayload } from './type/JwtPayload.type';
 
 describe('AuthService', () => {
   let authService: AuthService;
-  let configService: ConfigService;
-  let jwtService: JwtService;
-  let userService: UserService;
 
   const mockConfigService = {
-    getOrThrow: jest.fn((key: string): string => {
+    getOrThrow<T = string>(key: string): T {
       const config: Record<string, string> = {
         JWT_SECRET_ACCESS_TOKEN: 'secret',
         JWT_SECRET_REFRESH_TOKEN: 'refreshSecret',
@@ -27,8 +26,8 @@ describe('AuthService', () => {
         JWT_EXPIRATION_REFRESH_TOKEN: '7d',
         HASH_SALT: '10',
       };
-      return config[key];
-    }),
+      return config[key] as T;
+    },
   };
 
   const mockJwtService = {
@@ -42,20 +41,18 @@ describe('AuthService', () => {
     resetUserPassword: jest.fn(),
   };
 
-  const userExample: User = {
-    _id: new Types.ObjectId(),
-    email: 'test@example.com',
-    username: 'testUser',
-    is_verified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  const generateUser = (is_verified = true): User => ({
+    email: faker.internet.email(),
+    username: faker.internet.username(),
+    is_verified: is_verified,
+    createdAt: faker.date.past(),
+    updatedAt: faker.date.recent(),
+    _id: new Types.ObjectId(faker.database.mongodbObjectId()),
+  });
 
-  const userExampleFull: Required<User> = {
-    ...userExample,
-    password: 'hashedPassword',
-    __v: 0,
-  };
+  beforeAll(() => {
+    faker.seed(2);
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -68,9 +65,6 @@ describe('AuthService', () => {
     }).compile();
 
     authService = module.get<AuthService>(AuthService);
-    userService = module.get<UserService>(UserService);
-    jwtService = module.get<JwtService>(JwtService);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(() => {
@@ -80,15 +74,17 @@ describe('AuthService', () => {
 
   describe('generateAccessToken', () => {
     it('should return an access token', () => {
-      const payload: JwtPayload = { sub: userExampleFull._id };
-      const mockAccessToken = 'jsonwebtoken';
-      jwtService.sign = jest.fn().mockReturnValue('jsonwebtoken');
+      const payload: JwtPayload = {
+        sub: new Types.ObjectId(faker.database.mongodbObjectId()),
+      };
+      const mockAccessToken = faker.internet.jwt({ payload: payload });
+      mockJwtService.sign.mockReturnValueOnce(mockAccessToken);
 
       const accessToken = authService.generateAccessToken(payload);
 
-      expect(jwtService.sign).toHaveBeenCalledWith(payload, {
-        secret: configService.getOrThrow<string>('JWT_SECRET_ACCESS_TOKEN'),
-        expiresIn: configService.getOrThrow<string>(
+      expect(mockJwtService.sign).toHaveBeenCalledWith(payload, {
+        secret: mockConfigService.getOrThrow<string>('JWT_SECRET_ACCESS_TOKEN'),
+        expiresIn: mockConfigService.getOrThrow<string>(
           'JWT_EXPIRATION_ACCESS_TOKEN',
         ),
       });
@@ -98,15 +94,19 @@ describe('AuthService', () => {
 
   describe('generateRefreshToken', () => {
     it('should return a refresh token', () => {
-      const payload: JwtPayload = { sub: userExampleFull._id };
-      const mockRefreshToken = 'jsonwebtoken';
-      jwtService.sign = jest.fn().mockReturnValue('jsonwebtoken');
+      const payload: JwtPayload = {
+        sub: new Types.ObjectId(faker.database.mongodbObjectId()),
+      };
+      const mockRefreshToken = faker.internet.jwt({ payload: payload });
+      mockJwtService.sign.mockReturnValue(mockRefreshToken);
 
       const refreshToken = authService.generateRefreshToken(payload);
 
-      expect(jwtService.sign).toHaveBeenCalledWith(payload, {
-        secret: configService.getOrThrow<string>('JWT_SECRET_REFRESH_TOKEN'),
-        expiresIn: configService.getOrThrow<string>(
+      expect(mockJwtService.sign).toHaveBeenCalledWith(payload, {
+        secret: mockConfigService.getOrThrow<string>(
+          'JWT_SECRET_REFRESH_TOKEN',
+        ),
+        expiresIn: mockConfigService.getOrThrow<string>(
           'JWT_EXPIRATION_REFRESH_TOKEN',
         ),
       });
@@ -120,13 +120,13 @@ describe('AuthService', () => {
       const mockHashedText = 'hashedPassword';
       jest
         .spyOn(bcrypt, 'hash')
-        .mockImplementation(() => Promise.resolve('hashedPassword'));
+        .mockImplementationOnce(() => Promise.resolve('hashedPassword'));
 
       const hashedText = await authService.hash(plainText);
 
       expect(bcrypt.hash).toHaveBeenCalledWith(
         plainText,
-        Number(configService.getOrThrow<string>('HASH_SALT')),
+        Number(mockConfigService.getOrThrow<string>('HASH_SALT')),
       );
       expect(hashedText).toBe(mockHashedText);
     });
@@ -138,7 +138,7 @@ describe('AuthService', () => {
       const hashedText = 'hashedPassword';
       jest
         .spyOn(bcrypt, 'compare')
-        .mockImplementation(() => Promise.resolve(true));
+        .mockImplementationOnce(() => Promise.resolve(true));
 
       const isMatch = await authService.compareHash(plainText, hashedText);
 
@@ -151,7 +151,7 @@ describe('AuthService', () => {
       const hashedText = 'wrongHashed';
       jest
         .spyOn(bcrypt, 'compare')
-        .mockImplementation(() => Promise.resolve(false));
+        .mockImplementationOnce(() => Promise.resolve(false));
 
       const isMatch = await authService.compareHash(plainText, hashedText);
 
@@ -163,21 +163,26 @@ describe('AuthService', () => {
   describe('signup', () => {
     it('should successfully create a new user', async () => {
       const signupDto: SignupAuthDto = {
-        username: userExampleFull.username,
-        email: userExampleFull.email,
-        password: 'password',
+        username: faker.internet.username(),
+        email: faker.internet.email(),
+        password: generateStrongPassword(),
       };
-      const hashedPassword = userExampleFull.password;
-      const mockCreatedUser = { ...userExample };
-      authService.hash = jest.fn().mockResolvedValue(userExampleFull.password);
-      userService.createUser = jest.fn().mockResolvedValue({ ...userExample });
+
+      const hashedPassword = 'hashed' + signupDto.password;
+
+      const mockCreatedUser = generateUser(false);
+      mockCreatedUser.username = signupDto.username;
+      mockCreatedUser.email = signupDto.email;
+
+      authService.hash = jest.fn().mockResolvedValueOnce(hashedPassword);
+      mockUserService.createUser.mockResolvedValue({ ...mockCreatedUser });
 
       const createdUser = await authService.signup(signupDto);
 
-      expect(userService.createUser).toHaveBeenCalledWith({
+      expect(mockUserService.createUser).toHaveBeenCalledWith({
         username: signupDto.username,
         email: signupDto.email,
-        hashedPassword,
+        hashedPassword: hashedPassword,
       });
       expect(createdUser).toEqual(mockCreatedUser);
     });
@@ -185,132 +190,72 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('should return access and refresh tokens on successful login', async () => {
-      const loginDto1: LoginAuthDto = {
-        username: userExampleFull.username,
-        password: 'password',
+      const password = generateStrongPassword();
+      const loginDto: LoginAuthDto = {
+        username: faker.internet.username(),
+        password: password,
       };
-      const loginDto2: LoginAuthDto = {
-        email: userExampleFull.email,
-        password: 'password',
-      };
-      const user: User = { ...userExample };
-      const storedPassword = 'hashedPassword';
+
+      const user: User = generateUser();
+      user.username = loginDto.username!;
+
+      const storedPassword = 'hashed' + password;
+      const jwtPayload: JwtPayload = { sub: user._id };
       const mockTokens = {
-        accessToken: 'accessToken',
-        refreshToken: 'refreshToken',
+        accessToken: faker.internet.jwt(),
+        refreshToken: faker.internet.jwt(),
       };
-      userService.findUser = jest
-        .fn()
-        .mockResolvedValue({ ...userExample } as User);
-      userService.getUserPassword = jest
-        .fn()
-        .mockResolvedValue('hashedPassword');
-      authService.compareHash = jest.fn().mockResolvedValue(true);
-      jwtService.sign = jest
-        .fn()
-        .mockReturnValueOnce('accessToken')
-        .mockReturnValueOnce('refreshToken')
-        .mockReturnValueOnce('accessToken')
-        .mockReturnValueOnce('refreshToken');
 
-      const result1 = await authService.login(loginDto1);
-      const result2 = await authService.login(loginDto2);
+      mockUserService.findUser.mockResolvedValue({ ...user });
+      mockUserService.getUserPassword.mockResolvedValue(storedPassword);
+      authService.compareHash = jest.fn().mockResolvedValueOnce(true);
+      authService.generateAccessToken = jest
+        .fn()
+        .mockReturnValueOnce(mockTokens.accessToken);
+      authService.generateRefreshToken = jest
+        .fn()
+        .mockReturnValueOnce(mockTokens.refreshToken);
 
-      expect(userService.findUser).toHaveBeenNthCalledWith(1, {
-        username: loginDto1.username,
+      const result = await authService.login(loginDto);
+
+      expect(mockUserService.findUser).toHaveBeenCalledWith({
+        username: loginDto.username,
         email: undefined,
       });
-      expect(userService.findUser).toHaveBeenNthCalledWith(2, {
-        email: loginDto2.email,
-        username: undefined,
-      });
-      expect(userService.getUserPassword).toHaveBeenNthCalledWith(1, user._id);
-      expect(userService.getUserPassword).toHaveBeenNthCalledWith(2, user._id);
-      expect(authService.compareHash).toHaveBeenNthCalledWith(
-        1,
-        loginDto1.password,
+      expect(mockUserService.getUserPassword).toHaveBeenCalledWith(user._id);
+      expect(authService.compareHash).toHaveBeenCalledWith(
+        loginDto.password,
         storedPassword,
       );
-      expect(authService.compareHash).toHaveBeenNthCalledWith(
-        2,
-        loginDto2.password,
-        storedPassword,
-      );
-      expect(jwtService.sign).toHaveBeenNthCalledWith(
-        1,
-        {
-          sub: user._id,
-        },
-        {
-          secret: configService.getOrThrow<string>('JWT_SECRET_ACCESS_TOKEN'),
-          expiresIn: configService.getOrThrow<string>(
-            'JWT_EXPIRATION_ACCESS_TOKEN',
-          ),
-        },
-      );
-      expect(jwtService.sign).toHaveBeenNthCalledWith(
-        2,
-        {
-          sub: user._id,
-        },
-        {
-          secret: configService.getOrThrow<string>('JWT_SECRET_REFRESH_TOKEN'),
-          expiresIn: configService.getOrThrow<string>(
-            'JWT_EXPIRATION_REFRESH_TOKEN',
-          ),
-        },
-      );
-      expect(jwtService.sign).toHaveBeenNthCalledWith(
-        3,
-        {
-          sub: user._id,
-        },
-        {
-          secret: configService.getOrThrow<string>('JWT_SECRET_ACCESS_TOKEN'),
-          expiresIn: configService.getOrThrow<string>(
-            'JWT_EXPIRATION_ACCESS_TOKEN',
-          ),
-        },
-      );
-      expect(jwtService.sign).toHaveBeenNthCalledWith(
-        4,
-        {
-          sub: user._id,
-        },
-        {
-          secret: configService.getOrThrow<string>('JWT_SECRET_REFRESH_TOKEN'),
-          expiresIn: configService.getOrThrow<string>(
-            'JWT_EXPIRATION_REFRESH_TOKEN',
-          ),
-        },
-      );
-      expect(result1).toEqual(mockTokens);
-      expect(result2).toEqual(mockTokens);
+      expect(authService.generateAccessToken).toHaveBeenCalledWith(jwtPayload);
+      expect(authService.generateRefreshToken).toHaveBeenCalledWith(jwtPayload);
+      expect(result).toEqual(mockTokens);
     });
 
     it('should throw BadRequestException for incorrect password', async () => {
+      const password = generateStrongPassword();
       const loginDto: LoginAuthDto = {
-        username: userExampleFull.username,
-        password: 'wrongPassword',
+        username: faker.internet.username(),
+        password: password,
       };
-      const user: User = { ...userExample };
-      const storedPassword = 'hashedPassword';
-      userService.findUser = jest
-        .fn()
-        .mockResolvedValue({ ...userExample } as User);
-      userService.getUserPassword = jest
-        .fn()
-        .mockResolvedValue('hashedPassword');
-      authService.compareHash = jest.fn().mockResolvedValue(false);
+
+      const user: User = generateUser();
+      user.username = loginDto.username!;
+
+      const storedPassword = 'hashed' + password;
+
+      mockUserService.findUser.mockResolvedValue({ ...user });
+      mockUserService.getUserPassword.mockResolvedValue(storedPassword);
+      authService.compareHash = jest.fn().mockResolvedValueOnce(false);
 
       await expect(authService.login(loginDto)).rejects.toThrow(
         new BadRequestException('Password is incorrect'),
       );
-      expect(userService.findUser).toHaveBeenCalledWith({
+      expect(mockUserService.findUser).toHaveBeenCalledWith({
         username: loginDto.username,
         email: undefined,
       });
-      expect(userService.getUserPassword).toHaveBeenCalledWith(user._id);
+      expect(mockUserService.getUserPassword).toHaveBeenCalledWith(user._id);
       expect(authService.compareHash).toHaveBeenCalledWith(
         loginDto.password,
         storedPassword,
@@ -318,18 +263,21 @@ describe('AuthService', () => {
     });
 
     it('should throw BadRequestException for unverified email', async () => {
+      const password = generateStrongPassword();
       const loginDto: LoginAuthDto = {
-        username: userExampleFull.username,
-        password: 'password',
+        username: faker.internet.username(),
+        password: password,
       };
-      userService.findUser = jest
-        .fn()
-        .mockResolvedValue({ ...userExample, is_verified: false } as User);
+
+      const user: User = generateUser(false);
+      user.username = loginDto.username!;
+
+      mockUserService.findUser.mockResolvedValue({ ...user });
 
       await expect(authService.login(loginDto)).rejects.toThrow(
-        new BadRequestException('Please verify your email before logging in.'),
+        new BadRequestException('Please verify your email before logging in'),
       );
-      expect(userService.findUser).toHaveBeenCalledWith({
+      expect(mockUserService.findUser).toHaveBeenCalledWith({
         username: loginDto.username,
         email: undefined,
       });
@@ -338,23 +286,26 @@ describe('AuthService', () => {
 
   describe('changePassword', () => {
     it('should change the password successfully', async () => {
-      const id = userExampleFull._id;
-      const changePasswordDto: ChangePasswordAuthDto = {
-        password: userExampleFull.password,
-        newPassword: 'newPassword123',
-      };
-      const storedPassword = 'hashedOldPassword';
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
+      const password = generateStrongPassword();
+      const newPassword = generateStrongPassword();
 
-      userService.getUserPassword = jest
-        .fn()
-        .mockResolvedValue('hashedOldPassword');
-      authService.compareHash = jest.fn().mockResolvedValue(true);
-      authService.hash = jest.fn().mockResolvedValue('hashedNewPassword');
-      userService.resetUserPassword = jest.fn().mockResolvedValue(undefined);
+      const changePasswordDto: ChangePasswordAuthDto = {
+        password: password,
+        newPassword: newPassword,
+      };
+
+      const storedPassword = 'hashed' + password;
+      const newHashedPassword = 'hashed' + newPassword;
+
+      mockUserService.getUserPassword.mockResolvedValue(storedPassword);
+      authService.compareHash = jest.fn().mockResolvedValueOnce(true);
+      authService.hash = jest.fn().mockResolvedValueOnce(newHashedPassword);
+      mockUserService.resetUserPassword.mockResolvedValue(undefined);
 
       await authService.changePassword(id, changePasswordDto);
 
-      expect(userService.getUserPassword).toHaveBeenCalledWith(id);
+      expect(mockUserService.getUserPassword).toHaveBeenCalledWith(id);
       expect(authService.compareHash).toHaveBeenCalledWith(
         changePasswordDto.password,
         storedPassword,
@@ -365,22 +316,24 @@ describe('AuthService', () => {
     });
 
     it('should throw BadRequestException for incorrect current password', async () => {
-      const id = userExampleFull._id;
-      const changePasswordDto: ChangePasswordAuthDto = {
-        password: 'wrongPassword',
-        newPassword: 'newPassword123',
-      };
-      const storedPassword = 'hashedOldPassword';
+      const id = new Types.ObjectId(faker.database.mongodbObjectId());
+      const password = generateStrongPassword();
+      const newPassword = generateStrongPassword();
 
-      userService.getUserPassword = jest
-        .fn()
-        .mockResolvedValue('hashedOldPassword');
-      authService.compareHash = jest.fn().mockResolvedValue(false);
+      const changePasswordDto: ChangePasswordAuthDto = {
+        password: password,
+        newPassword: newPassword,
+      };
+
+      const storedPassword = 'hashed' + password;
+
+      mockUserService.getUserPassword.mockResolvedValue(storedPassword);
+      authService.compareHash = jest.fn().mockResolvedValueOnce(false);
 
       await expect(
         authService.changePassword(id, changePasswordDto),
       ).rejects.toThrow(new BadRequestException('Password is incorrect'));
-      expect(userService.getUserPassword).toHaveBeenCalledWith(id);
+      expect(mockUserService.getUserPassword).toHaveBeenCalledWith(id);
       expect(authService.compareHash).toHaveBeenCalledWith(
         changePasswordDto.password,
         storedPassword,
