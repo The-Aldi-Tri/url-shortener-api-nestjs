@@ -6,7 +6,14 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiUnprocessableEntityResponse,
+} from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { GetUnverifiedUserDto } from './dto/get-unverified-user.dto';
 import { UserService } from './user.service';
@@ -18,12 +25,24 @@ export class UserController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ description: 'User (unverified) successfully retrieved' })
+  @ApiForbiddenResponse({ description: 'Account already verified' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
+  @ApiBody({
+    type: GetUnverifiedUserDto,
+    examples: {
+      'Using username': { value: { username: 'user123' } },
+      'Using email': { value: { email: 'user@example.com' } },
+      'Using userId': { value: { userId: new Types.ObjectId() } },
+    },
+  })
   async findUnverifiedUser(@Body() body: GetUnverifiedUserDto) {
     const { userId, username, email } = body;
 
     let user;
     if (userId) {
-      user = await this.userService.findUserById(new Types.ObjectId(userId));
+      user = await this.userService.findUserById(userId);
     } else {
       user = await this.userService.findUser({ username, email });
     }

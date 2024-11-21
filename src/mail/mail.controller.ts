@@ -1,6 +1,14 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiConflictResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Types } from 'mongoose';
 import { SendMailDto } from './dto/send-mail.dto';
 import { VerifyMailDto } from './dto/verify-mail.dto';
 import { MailService } from './mail.service';
@@ -13,6 +21,9 @@ export class MailController {
   @Post('send')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 1, ttl: 30000 } })
+  @ApiOkResponse({ description: 'Verification mail sent' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiConflictResponse({ description: 'Account already verified' })
   async send(@Body() sendMailDto: SendMailDto) {
     const { email } = sendMailDto;
 
@@ -24,6 +35,27 @@ export class MailController {
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 30000 } })
+  @ApiOkResponse({ description: 'Verification success' })
+  @ApiBadRequestResponse({ description: 'Invalid verification code' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiConflictResponse({ description: 'Account already verified' })
+  @ApiBody({
+    type: VerifyMailDto,
+    examples: {
+      'Verify with userId': {
+        value: {
+          userId: new Types.ObjectId(),
+          verificationCode: 123456,
+        },
+      },
+      'Verify with email': {
+        value: {
+          email: 'user@example.com',
+          verificationCode: 123456,
+        },
+      },
+    },
+  })
   async verify(@Body() verifyMailDto: VerifyMailDto) {
     const { email, userId, verificationCode } = verifyMailDto;
 

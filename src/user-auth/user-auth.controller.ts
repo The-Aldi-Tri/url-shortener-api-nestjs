@@ -45,13 +45,7 @@ export class UserAuthController {
   @Patch()
   @ApiBody({
     type: UpdateUserAuthDto,
-    examples: {
-      'Update username': {
-        value: {
-          username: 'user123v2',
-        },
-      },
-    },
+    examples: { 'Update username': { value: { username: 'user123v2' } } },
   })
   @ApiOkResponse({ description: 'User successfully updated' })
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
@@ -75,7 +69,6 @@ export class UserAuthController {
   @ApiOkResponse({ description: 'User successfully deleted' })
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
   async remove(@Req() req: AuthenticatedRequest) {
     const { id } = req.user;
     const deletedUser = await this.userService.deleteUser(id);

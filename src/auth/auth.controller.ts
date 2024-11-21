@@ -105,6 +105,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'Change password success' })
   @ApiBadRequestResponse({ description: 'Password is incorrect' })
+  @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
   async changePassword(

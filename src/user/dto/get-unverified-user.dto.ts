@@ -12,10 +12,9 @@ export class GetUnverifiedUserDto {
   @ApiProperty({
     description:
       'Username (only support letters[A-Za-z], numbers[0-9], hyphens[-], underscores[_] and dot [.]',
-    minLength: 3,
-    maxLength: 30,
     pattern: '/^[A-Za-z0-9-_.]{3,30}$/',
     example: 'user123',
+    required: false,
   })
   @ValidateIf((o) => o.username)
   @Matches(/^[A-Za-z0-9-_.]{3,30}$/, {
@@ -27,6 +26,7 @@ export class GetUnverifiedUserDto {
   @ApiProperty({
     description: 'E-mail address',
     example: 'user@example.com',
+    required: false,
   })
   @ValidateIf((o) => o.email)
   @IsEmail()
@@ -35,6 +35,7 @@ export class GetUnverifiedUserDto {
   @ApiProperty({
     description: 'The user ID (MongoDB ObjectId)',
     example: new Types.ObjectId(),
+    required: false,
   })
   @ValidateIf((o) => o.userId)
   @IsMongoId()

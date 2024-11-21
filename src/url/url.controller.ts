@@ -28,9 +28,9 @@ import { UrlService } from './url.service';
 export class UrlController {
   constructor(private readonly urlService: UrlService) {}
 
-  @ApiBearerAuth()
   @Post()
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiCreatedResponse({ description: 'Url successfully created' })
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -50,9 +50,9 @@ export class UrlController {
     };
   }
 
-  @ApiBearerAuth()
   @Get()
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOkResponse({ description: 'Url(s) successfully retrieved' })
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -68,21 +68,9 @@ export class UrlController {
     };
   }
 
-  @Get(':shorten')
-  @ApiOkResponse({ description: 'Original url found' })
-  @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
-  @ApiNotFoundResponse({ description: 'Url or user not found' })
-  async findOne(@Param('shorten') shorten: string) {
-    const url = await this.urlService.findUrlByShorten(shorten);
-
-    await this.urlService.incrementUrlClicks(url._id);
-
-    return { statusCode: 200, message: 'Original url found', data: url.origin };
-  }
-
-  @ApiBearerAuth()
   @Delete()
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOkResponse({ description: 'Url(s) successfully deleted' })
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -103,5 +91,17 @@ export class UrlController {
       statusCode: 200,
       message: `${deleteCount} Url(s) successfully deleted`,
     };
+  }
+
+  @Get(':shorten')
+  @ApiOkResponse({ description: 'Original url found' })
+  @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
+  @ApiNotFoundResponse({ description: 'Url not found' })
+  async findOne(@Param('shorten') shorten: string) {
+    const url = await this.urlService.findUrlByShorten(shorten);
+
+    await this.urlService.incrementUrlClicks(url._id);
+
+    return { statusCode: 200, message: 'Original url found', data: url.origin };
   }
 }

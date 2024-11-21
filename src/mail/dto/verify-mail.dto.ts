@@ -14,6 +14,7 @@ export class VerifyMailDto {
   @ApiProperty({
     description: 'E-mail address',
     example: 'user@example.com',
+    required: false,
   })
   @ValidateIf((o) => o.email)
   @IsEmail()
@@ -22,6 +23,7 @@ export class VerifyMailDto {
   @ApiProperty({
     description: 'The user ID (MongoDB ObjectId)',
     example: new Types.ObjectId(),
+    required: false,
   })
   @ValidateIf((o) => o.userId)
   @IsMongoId()
