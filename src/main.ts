@@ -12,10 +12,11 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: WinstonModule.createLogger(WinstonLoggerOptions),
   });
+  const configService = app.get(ConfigService);
 
   app.use(helmet());
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: [configService.getOrThrow<string>('CORS_ORIGIN')],
   });
 
   // Trust requests from the loopback address
@@ -31,9 +32,6 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, documentFactory);
 
-  // app.useGlobalFilters(new MongoExceptionFilter());
-
-  const configService = app.get(ConfigService);
   const port = Number(configService.getOrThrow<string>('APP_PORT'));
   await app.listen(port, () => {
     Logger.log(`Server is listening on port ${port}`, 'Server');
