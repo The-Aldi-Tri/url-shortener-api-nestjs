@@ -70,10 +70,10 @@ html(lang="en")
       div(class="divider")
 
       .body-text
-        p Hi <strong>#{username}</strong>,
+        p Hi, <strong>#{username}</strong>.
         p Thank you for signing up with us. Please verify your email address to complete the registration process.
 
-        p Your verification code is <strong>#{otp}</strong> (Valid for 5 minutes).
+        p Your verification code is <strong>#{verificationCode}</strong> (Valid for 5 minutes).
         p
           | Enter this code on our 
           a(href=websiteVerificationLink) website

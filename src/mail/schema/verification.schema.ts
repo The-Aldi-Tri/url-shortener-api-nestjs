@@ -1,21 +1,21 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-export type OtpDocument = HydratedDocument<Otp>;
+export type VerificationDocument = HydratedDocument<Verification>;
 
 @Schema({
-  collection: 'otp',
+  collection: 'verification',
 })
-export class Otp {
+export class Verification {
   @Prop({ required: true, unique: true })
   email: string;
 
   @Prop({ required: true })
-  otp: number;
+  verificationCode: number;
 
   @Prop({
     default: Date.now(),
-    expires: 60 * 5,
+    expires: 5 * 60, // 5 minute
   })
   createdAt: Date;
 
@@ -30,4 +30,4 @@ export class Otp {
   _id: Types.ObjectId;
 }
 
-export const OtpSchema = SchemaFactory.createForClass(Otp);
+export const VerificationSchema = SchemaFactory.createForClass(Verification);

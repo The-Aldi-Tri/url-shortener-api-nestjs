@@ -14,6 +14,7 @@ import {
   ApiBody,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiTags,
@@ -70,9 +71,8 @@ export class AuthController {
     },
   })
   @ApiOkResponse({ description: 'Login success' })
-  @ApiBadRequestResponse({
-    description: 'Password is incorrect OR Email not yet verified',
-  })
+  @ApiBadRequestResponse({ description: 'Password is incorrect' })
+  @ApiForbiddenResponse({ description: 'User not verified' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiUnprocessableEntityResponse({ description: 'Data validation failed' })
   async login(@Body() loginAuthDto: LoginAuthDto) {

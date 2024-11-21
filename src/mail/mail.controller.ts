@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { SendMailDto } from './dto/send-mail.dto';
@@ -22,19 +14,20 @@ export class MailController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 1, ttl: 30000 } })
   async send(@Body() sendMailDto: SendMailDto) {
-    const { email, username } = sendMailDto;
+    const { email } = sendMailDto;
 
-    await this.mailService.sendMail(email, username);
+    await this.mailService.sendMail(email);
 
     return { statusCode: 200, message: 'Verification mail sent' };
   }
 
-  @Get('verify')
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async verify(@Query() verifyMailDto: VerifyMailDto) {
-    const { email, otp } = verifyMailDto;
+  @Post('verify')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 30000 } })
+  async verify(@Body() verifyMailDto: VerifyMailDto) {
+    const { email, userId, verificationCode } = verifyMailDto;
 
-    await this.mailService.verifyEmail(email, otp);
+    await this.mailService.verifyAccount({ userId, email, verificationCode });
 
     return { statusCode: 200, message: 'Verification success' };
   }

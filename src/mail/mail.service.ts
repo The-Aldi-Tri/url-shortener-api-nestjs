@@ -1,84 +1,131 @@
 import { MailerService } from '@nestjs-modules/mailer';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { randomInt } from 'crypto';
+import { Model, Types } from 'mongoose';
+import { ClsService } from 'nestjs-cls';
 import { UserService } from '../user/user.service';
-import { Otp } from './schema/otp.schema';
+import { Verification } from './schema/verification.schema';
 
 @Injectable()
 export class MailService {
   constructor(
+    @InjectModel(Verification.name)
+    private readonly verificationModel: Model<Verification>,
     private readonly mailerService: MailerService,
-    @InjectModel(Otp.name) private readonly otpModel: Model<Otp>,
     private readonly configService: ConfigService,
     private readonly userService: UserService,
+    private readonly clsService: ClsService,
   ) {}
   private readonly logger = new Logger(MailService.name);
 
   generateVerificationCode(): number {
-    return Math.floor(100000 + Math.random() * 900000); // range 100000 - 999999
+    return randomInt(100000, 1000000);
   }
 
-  async createOtp(email: string, otp: number): Promise<Otp> {
-    const newOtp = await this.otpModel
+  async createVerificationRecord(
+    email: string,
+    verificationCode: number,
+  ): Promise<Verification> {
+    const newVerificationRecord = await this.verificationModel
       .findOneAndReplace(
         { email },
-        { email, otp, createdAt: Date.now() },
+        { email, verificationCode, createdAt: Date.now() },
         { upsert: true, returnDocument: 'after' },
       )
       .lean()
       .exec();
 
-    return newOtp;
+    return newVerificationRecord;
   }
 
-  async sendMail(email: string, username: string): Promise<void> {
-    const otp = this.generateVerificationCode();
+  async sendMail(email: string): Promise<void> {
+    const user = await this.userService.findUser({ email });
 
-    await this.createOtp(email, otp);
+    if (user.is_verified) {
+      throw new ConflictException('Account already verified');
+    }
+
+    const verificationCode = this.generateVerificationCode();
+    await this.createVerificationRecord(user.email, verificationCode);
 
     try {
       await this.mailerService.sendMail({
-        to: email,
+        to: user.email,
         from: 'noreply@aldi-dev.online',
         subject: 'E-mail verification',
         template: 'emailVerification',
         context: {
-          username,
-          otp,
-          websiteVerificationLink: this.configService.getOrThrow<string>(
-            'CLIENT_VERIFICATION_URL',
-          ),
+          email: user.email,
+          username: user.username,
+          verificationCode,
+          websiteVerificationLink:
+            this.configService.getOrThrow<string>('CLIENT_VERIFICATION_URL') +
+            user._id,
           directVerificationLink:
-            this.configService.getOrThrow<string>('API_VERIFICATION_URL') +
-            `?email=${email}&otp=${otp}`,
+            this.configService.getOrThrow<string>('DIRECT_VERIFICATION_URL') +
+            `?userId=${user._id}&verificationCode=${verificationCode}`,
         },
       });
-      this.logger.log(`Successfully sent mail to ${email}`);
+      this.logger.log(
+        `Successfully sent mail to ${user.email} - ReqId: ${this.clsService.get('reqId')}`,
+      );
     } catch (error) {
-      this.logger.error(`Error when sending mail to ${email}`, error);
+      this.logger.error(
+        `Error when sending mail to ${user.email} - ReqId: ${this.clsService.get('reqId')}`,
+        error,
+      );
 
-      await this.otpModel.deleteOne({ email }).lean().exec();
+      await this.verificationModel
+        .deleteOne({ email: user.email })
+        .lean()
+        .exec();
 
       throw new InternalServerErrorException();
     }
   }
 
-  async verifyEmail(email: string, otp: number): Promise<void> {
-    const otpDoc = await this.otpModel.exists({ email, otp });
-
-    if (!otpDoc || !otpDoc._id) {
-      throw new BadRequestException('Verification failed');
+  async verifyAccount({
+    userId,
+    email,
+    verificationCode,
+  }: {
+    userId: Types.ObjectId | undefined;
+    email: string | undefined;
+    verificationCode: number;
+  }): Promise<void> {
+    let user;
+    if (userId) {
+      user = await this.userService.findUserById(userId);
+    } else {
+      user = await this.userService.findUser({ email });
     }
 
-    await this.userService.verifyUserByEmail(email);
+    if (user.is_verified) {
+      throw new ConflictException('Account already verified');
+    }
 
-    await this.otpModel.deleteOne({ _id: otpDoc._id }).lean().exec();
+    const verificationRecord = await this.verificationModel.exists({
+      email: user.email,
+      verificationCode,
+    });
+
+    if (!verificationRecord) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    await this.userService.verifyUserByEmail(user.email);
+
+    await this.verificationModel
+      .deleteOne({ _id: verificationRecord._id })
+      .lean()
+      .exec();
   }
 }

@@ -5,7 +5,7 @@ import { Model } from 'mongoose';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AuthService } from '../src/auth/auth.service';
-import { Otp } from '../src/mail/schema/otp.schema';
+import { Verification } from '../src/mail/schema/verification.schema';
 import { User } from '../src/user/schema/user.schema';
 import { createUserRecord } from './utils/createUserRecord';
 import { faker } from './utils/faker';
@@ -13,7 +13,7 @@ import { faker } from './utils/faker';
 describe('Mail routes (e2e)', () => {
   let app: INestApplication;
   let userModel: Model<User>;
-  let otpModel: Model<Otp>;
+  let verificationModel: Model<Verification>;
   let authService: AuthService;
 
   beforeAll(() => {
@@ -26,7 +26,9 @@ describe('Mail routes (e2e)', () => {
     }).compile();
 
     userModel = moduleFixture.get<Model<User>>(getModelToken(User.name));
-    otpModel = moduleFixture.get<Model<Otp>>(getModelToken(Otp.name));
+    verificationModel = moduleFixture.get<Model<Verification>>(
+      getModelToken(Verification.name),
+    );
     authService = moduleFixture.get<AuthService>(AuthService);
 
     app = moduleFixture.createNestApplication();
@@ -35,16 +37,14 @@ describe('Mail routes (e2e)', () => {
 
   afterEach(async () => {
     await userModel.deleteMany({});
-    await otpModel.deleteMany({});
+    await verificationModel.deleteMany({});
     await app.close();
   });
 
   describe('POST /mail/send', () => {
     it('should return 200', async () => {
-      const requestBody = {
-        email: faker.internet.email(),
-        username: faker.internet.username(),
-      };
+      const { user } = await createUserRecord(userModel, authService, false);
+      const requestBody = { email: user.email };
 
       const response = await request(app.getHttpServer())
         .post('/mail/send')
@@ -62,13 +62,14 @@ describe('Mail routes (e2e)', () => {
 
   describe('GET /mail/verify', () => {
     it('should return 200', async () => {
+      const verificationCode = faker.number.int({ min: 100000, max: 999999 });
       const { user } = await createUserRecord(userModel, authService, false);
-      const otpDoc = await otpModel.create({ email: user.email, otp: 123456 });
+      await verificationModel.create({ email: user.email, verificationCode });
+      const requestBody = { email: user.email, verificationCode };
 
       const response = await request(app.getHttpServer())
-        .get('/mail/verify')
-        .query({ email: user.email, otp: otpDoc.otp.toString() })
-        .send();
+        .post('/mail/verify')
+        .send({ ...requestBody });
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(

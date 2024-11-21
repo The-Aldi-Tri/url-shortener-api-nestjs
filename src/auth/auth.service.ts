@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -68,17 +72,17 @@ export class AuthService {
 
     const user = await this.userService.findUser({ username, email });
 
-    if (!user.is_verified) {
-      throw new BadRequestException(
-        'Please verify your email before logging in',
-      );
-    }
-
     const storedPassword = await this.userService.getUserPassword(user._id);
 
     const isPasswordMatch = await this.compareHash(password, storedPassword);
     if (!isPasswordMatch) {
       throw new BadRequestException('Password is incorrect');
+    }
+
+    if (!user.is_verified) {
+      throw new ForbiddenException(
+        'Please verify your email before logging in',
+      );
     }
 
     const jwtPayload: JwtPayload = { sub: user._id };

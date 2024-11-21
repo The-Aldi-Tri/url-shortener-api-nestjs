@@ -194,7 +194,7 @@ describe('Auth routes (e2e)', () => {
       );
     });
 
-    it('should return 400 when user not verified', async () => {
+    it('should return 403 when user not verified', async () => {
       const { user, password } = await createUserRecord(
         userModel,
         authService,
@@ -209,11 +209,11 @@ describe('Auth routes (e2e)', () => {
         .post('/auth/login')
         .send({ ...requestBody });
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(403);
       expect(response.body).toEqual(
         expect.objectContaining({
-          statusCode: 400,
-          error: 'Bad Request',
+          statusCode: 403,
+          error: 'Forbidden',
           message: 'Please verify your email before logging in',
         }),
       );

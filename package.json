@@ -96,6 +96,7 @@
     "coveragePathIgnorePatterns": [
       "/main\\.ts$",
       ".*\\.module\\.ts$",
+      ".*\\.dto\\.ts$",
       ".*\\.filter\\.ts$",
       ".*\\.middleware\\.ts$",
       ".*\\.logger\\.ts$"

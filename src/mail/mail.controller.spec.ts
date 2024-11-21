@@ -10,7 +10,7 @@ describe('MailController', () => {
 
   const mockMailService = {
     sendMail: jest.fn(),
-    verifyEmail: jest.fn(),
+    verifyAccount: jest.fn(),
   };
 
   beforeAll(() => {
@@ -32,10 +32,7 @@ describe('MailController', () => {
 
   describe('send', () => {
     it('should send a verification email successfully', async () => {
-      const sendMailDto: SendMailDto = {
-        email: faker.internet.email(),
-        username: faker.internet.username(),
-      };
+      const sendMailDto: SendMailDto = { email: faker.internet.email() };
       mockMailService.sendMail.mockResolvedValue(undefined);
 
       const result = await mailController.send(sendMailDto);
@@ -44,20 +41,17 @@ describe('MailController', () => {
         statusCode: 200,
         message: 'Verification mail sent',
       });
-      expect(mockMailService.sendMail).toHaveBeenCalledWith(
-        sendMailDto.email,
-        sendMailDto.username,
-      );
+      expect(mockMailService.sendMail).toHaveBeenCalledWith(sendMailDto.email);
     });
   });
 
   describe('verify', () => {
-    it('should verify email with correct OTP successfully', async () => {
+    it('should verify email with correct code successfully', async () => {
       const verifyMailDto: VerifyMailDto = {
         email: faker.internet.email(),
-        otp: faker.number.int({ min: 100000, max: 999999 }),
+        verificationCode: faker.number.int({ min: 100000, max: 999999 }),
       };
-      mockMailService.verifyEmail.mockResolvedValue(undefined);
+      mockMailService.verifyAccount.mockResolvedValue(undefined);
 
       const result = await mailController.verify(verifyMailDto);
 
@@ -65,10 +59,11 @@ describe('MailController', () => {
         statusCode: 200,
         message: 'Verification success',
       });
-      expect(mockMailService.verifyEmail).toHaveBeenCalledWith(
-        verifyMailDto.email,
-        verifyMailDto.otp,
-      );
+      expect(mockMailService.verifyAccount).toHaveBeenCalledWith({
+        email: verifyMailDto.email,
+        userId: undefined,
+        verificationCode: verifyMailDto.verificationCode,
+      });
     });
   });
 });

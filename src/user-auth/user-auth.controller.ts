@@ -23,12 +23,12 @@ import { UpdateUserAuthDto } from './dto/update-user-auth.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UserAuthController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'User successfully retrieved' })
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -43,7 +43,6 @@ export class UserAuthController {
   }
 
   @Patch()
-  @UseGuards(JwtAuthGuard)
   @ApiBody({
     type: UpdateUserAuthDto,
     examples: {
@@ -73,7 +72,6 @@ export class UserAuthController {
   }
 
   @Delete()
-  @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'User successfully deleted' })
   @ApiUnauthorizedResponse({ description: 'Token not valid or not present' })
   @ApiNotFoundResponse({ description: 'User not found' })

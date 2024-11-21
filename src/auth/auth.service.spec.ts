@@ -273,6 +273,8 @@ describe('AuthService', () => {
       user.username = loginDto.username!;
 
       mockUserService.findUser.mockResolvedValue({ ...user });
+      mockUserService.getUserPassword.mockResolvedValue(password);
+      authService.compareHash = jest.fn().mockResolvedValueOnce(true);
 
       await expect(authService.login(loginDto)).rejects.toThrow(
         new BadRequestException('Please verify your email before logging in'),
