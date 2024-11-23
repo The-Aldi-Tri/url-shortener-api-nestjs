@@ -1,0 +1,36 @@
+name: Url-Shortener-Backend
+services:
+  nestjs-api:
+    container_name: nestjs-api
+    env_file: .env
+    build:
+      context: .
+    networks:
+      - backend-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    # restart: always
+
+  mongodb:
+    container_name: mongodb
+    image: mongo:latest
+    env_file: .env
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    networks:
+      - backend-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh 127.0.0.1:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 2
+    # restart: always
+
+networks:
+  backend-network:
+
+volumes:
+  mongo-data:
+  mongo-config:
