@@ -12,5 +12,6 @@ WORKDIR /usr/src/app
 COPY --from=build /usr/src/app/dist ./dist
 COPY package*.json ./
 RUN npm ci --omit=dev
+COPY templates ./templates
 EXPOSE 3000
 CMD [ "npm", "run", "start:prod" ]
