@@ -116,6 +116,7 @@ import { UserModule } from './user/user.module';
               user: configService.getOrThrow<string>('SMTP_USER'),
               pass: configService.getOrThrow<string>('SMTP_PASS'),
             },
+            secure: true, // connect to the SMTP server on the standard SSL/TLS port (usually port 465)
           },
           template: {
             dir: __dirname + '/../templates',
